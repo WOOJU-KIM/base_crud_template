@@ -1,0 +1,407 @@
+@import '@astryxdesign/core/reset.css';
+@import '@astryxdesign/core/astryx.css';
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom utility styles for subtle interactive tree/table polish */
+.crud-tree-panel-scroll {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.crud-table-viewport {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  /* LayoutContent의 container-padding 변수가 내부 wrapper의 table bleed로 전달되어
+     상단 헤더와 좌측 체크박스가 음수 마진(-16px)으로 잘리는 현상을 방지합니다 */
+  --container-padding-inline-start: 0px;
+  --container-padding-inline-end: 0px;
+  --container-padding-block-start: 0px;
+  --container-padding-block-end: 0px;
+  border: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.2));
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+}
+
+.crud-table-viewport > .astryx-table-scroll-wrapper {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+/* 테이블 헤더를 스크롤 시에도 상단에 고정(Sticky) */
+.crud-table-viewport .astryx-table-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--color-surface-elevated, #f7f8fa);
+}
+
+[data-theme="dark"] .crud-table-viewport .astryx-table-header {
+  background: var(--color-surface-elevated, #1f2229);
+}
+
+.crud-floating-toolbar {
+  position: sticky;
+  bottom: 16px;
+  z-index: 20;
+  margin: 0 auto;
+  max-width: 720px;
+  width: calc(100% - 32px);
+  box-shadow: var(--shadow-high, 0 8px 24px rgba(0, 0, 0, 0.14));
+  border-radius: var(--radius-lg, 10px);
+}
+
+.crud-clickable-row {
+  cursor: pointer;
+}
+
+/* =========================================================
+   Spreadsheet I/O CRUD Template Styles (Astryx Token-aligned)
+   ========================================================= */
+.sheet-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.22));
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-surface, #ffffff);
+  position: relative;
+}
+
+[data-theme="dark"] .sheet-viewport {
+  background: var(--color-surface, #16181d);
+}
+
+.sheet-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.sheet-thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-surface-elevated, #f7f8fa);
+}
+
+[data-theme="dark"] .sheet-thead {
+  background: var(--color-surface-elevated, #1f2229);
+}
+
+.sheet-th {
+  height: 36px;
+  padding: 0 10px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--color-text-secondary, #5a6270);
+  border-bottom: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.24));
+  border-right: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.14));
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sheet-th:last-child {
+  border-right: none;
+}
+
+.sheet-tr {
+  height: 36px;
+}
+
+.sheet-tr:hover .sheet-td {
+  background-color: rgba(128, 128, 128, 0.04);
+}
+
+.sheet-tr.is-row-dirty .sheet-td-index {
+  border-left: 3px solid #2563eb;
+}
+
+.sheet-tr.is-row-new .sheet-td-index {
+  border-left: 3px solid #10b981;
+}
+
+.sheet-tr.is-row-error .sheet-td-index {
+  border-left: 3px solid #ef4444;
+}
+
+.sheet-td {
+  height: 36px;
+  padding: 0;
+  border-bottom: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.15));
+  border-right: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.12));
+  position: relative;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+.sheet-td:last-child {
+  border-right: none;
+}
+
+.sheet-td-index {
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-secondary, #6b7280);
+  background: rgba(128, 128, 128, 0.03);
+  user-select: none;
+}
+
+.sheet-cell-display {
+  width: 100%;
+  height: 35px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  cursor: cell;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  outline: none;
+}
+
+.sheet-cell-display.align-end {
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-cell-display.align-center {
+  justify-content: center;
+}
+
+.sheet-cell-display.is-readonly {
+  cursor: default;
+  color: var(--color-text-secondary, #6b7280);
+  background: rgba(128, 128, 128, 0.025);
+}
+
+.sheet-td.is-active {
+  box-shadow: inset 0 0 0 2px #2563eb;
+  z-index: 2;
+}
+
+.sheet-td.is-cell-dirty::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-width: 0 6px 6px 0;
+  border-style: solid;
+  border-color: transparent #2563eb transparent transparent;
+  pointer-events: none;
+}
+
+.sheet-td.is-cell-error {
+  background-color: rgba(239, 68, 68, 0.08);
+  box-shadow: inset 0 0 0 1.5px #ef4444;
+}
+
+.sheet-cell-input,
+.sheet-cell-select {
+  width: 100%;
+  height: 35px;
+  padding: 0 8px;
+  border: none;
+  outline: none;
+  background: var(--color-surface, #ffffff);
+  color: inherit;
+  font-family: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+[data-theme="dark"] .sheet-cell-input,
+[data-theme="dark"] .sheet-cell-select {
+  background: #1e2430;
+  color: #f3f4f6;
+}
+
+.sheet-cell-input.align-end {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================================
+   Template 3: Split Spec Workbench & Dual-List Shuttle Styles
+   ========================================================= */
+.wb-catalog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wb-rule-card {
+  padding: 10px 12px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.2));
+  background: var(--color-surface, #ffffff);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-theme="dark"] .wb-rule-card {
+  background: var(--color-surface, #16181d);
+}
+
+.wb-rule-card:hover {
+  border-color: rgba(37, 99, 235, 0.45);
+}
+
+.wb-rule-card.is-selected {
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.05);
+  box-shadow: 0 0 0 1px #2563eb;
+}
+
+[data-theme="dark"] .wb-rule-card.is-selected {
+  background: rgba(37, 99, 235, 0.14);
+}
+
+/* USL / Target / LSL Visual Spec Tolerance Gauge */
+.wb-gauge-box {
+  padding: 12px 16px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.2));
+  background: rgba(128, 128, 128, 0.03);
+}
+
+.wb-gauge-track {
+  position: relative;
+  height: 22px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(239, 68, 68, 0.18) 0%,
+    rgba(239, 68, 68, 0.18) 18%,
+    rgba(16, 185, 129, 0.22) 18%,
+    rgba(16, 185, 129, 0.22) 82%,
+    rgba(239, 68, 68, 0.18) 82%,
+    rgba(239, 68, 68, 0.18) 100%
+  );
+  border: 1px solid rgba(128, 128, 128, 0.22);
+  margin: 8px 0 4px;
+}
+
+.wb-gauge-marker {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 3px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+}
+
+.wb-gauge-marker.is-lsl {
+  left: 18%;
+  background: #ef4444;
+}
+
+.wb-gauge-marker.is-target {
+  left: 50%;
+  background: #2563eb;
+  width: 4px;
+}
+
+.wb-gauge-marker.is-usl {
+  left: 82%;
+  background: #ef4444;
+}
+
+/* Dual-List Shuttle Box */
+.wb-shuttle-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1.15fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.wb-shuttle-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.22));
+  border-radius: var(--radius-md, 8px);
+  background: var(--color-surface, #ffffff);
+  overflow: hidden;
+}
+
+[data-theme="dark"] .wb-shuttle-pane {
+  background: var(--color-surface, #16181d);
+}
+
+.wb-shuttle-pane-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.18));
+  background: var(--color-surface-elevated, #f7f8fa);
+}
+
+[data-theme="dark"] .wb-shuttle-pane-header {
+  background: var(--color-surface-elevated, #1f2229);
+}
+
+.wb-shuttle-list-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  position: relative;
+}
+
+.wb-shuttle-row {
+  height: 36px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.12));
+  font-size: 13px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.wb-shuttle-row:hover {
+  background: rgba(128, 128, 128, 0.05);
+}
+
+.wb-shuttle-row.is-checked {
+  background: rgba(37, 99, 235, 0.07);
+}
+
+.wb-shuttle-center-controls {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.wb-override-input {
+  width: 68px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 12px;
+  text-align: right;
+  border: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.3));
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+}
+
+

@@ -1,0 +1,1065 @@
+import { Badge } from '@astryxdesign/core/Badge';
+import { Card } from '@astryxdesign/core/Card';
+import { HStack } from '@astryxdesign/core/HStack';
+import { Text } from '@astryxdesign/core/Text';
+import { StatusDot } from '@astryxdesign/core/StatusDot';
+import { pixel, proportional } from '@astryxdesign/core/Table';
+import type {
+  BaseRecordItem,
+  HierarchyNode,
+  MasterDataDomainConfig,
+} from '../templates/master-crud';
+import type { SpreadsheetDomainConfig } from '../templates/spreadsheet-crud';
+import type {
+  SpecWorkbenchDomainConfig,
+  WorkbenchPoolItem,
+} from '../templates/spec-workbench-crud';
+
+/**
+ * [예시 1] 다단 계층형 분석/규격 기준정보 (USL / LSL / Target 및 수천 개 적용 대상 아이템)
+ * - N단 트리: 공정군(1단) -> 세부 공정(2단) -> 분석 기법(3단) -> 측정 파라미터(4단)
+ * - 말단 요소: 해당 분석 기법과 USL/LSL이 적용되는 수천 개의 아이템 리스트
+ */
+export interface SpecItemRecord extends BaseRecordItem {
+  id: string;
+  nodeId: string;
+  itemCode: string;
+  itemName: string;
+  analysisMethod: string;
+  targetValue: number;
+  lsl: number;
+  usl: number;
+  unit: string;
+  samplingRule: string;
+  status: 'ACTIVE' | 'REVIEW' | 'HOLD';
+  remarks?: string;
+}
+
+export interface SpecNodeMeta {
+  defaultMethod?: string;
+  defaultLsl?: number;
+  defaultTarget?: number;
+  defaultUsl?: number;
+  unit?: string;
+}
+
+const specTreeData: HierarchyNode<SpecNodeMeta>[] = [
+  {
+    id: 'root-feol',
+    parentId: null,
+    name: 'FEOL (전공정 기준정보)',
+    code: 'FEOL',
+    levelLabel: '1단: 공정군',
+    isExpanded: true,
+    children: [
+      {
+        id: 'proc-litho',
+        parentId: 'root-feol',
+        name: 'Photo / Lithography',
+        code: 'LITHO',
+        levelLabel: '2단: 공정',
+        isExpanded: true,
+        children: [
+          {
+            id: 'method-cdsem',
+            parentId: 'proc-litho',
+            name: 'CD-SEM (임계치수 주사전자현미경)',
+            code: 'M-CDSEM',
+            levelLabel: '3단: 분석기법',
+            isExpanded: true,
+            meta: {
+              defaultMethod: 'CD-SEM',
+              defaultLsl: 12.5,
+              defaultTarget: 14.0,
+              defaultUsl: 15.5,
+              unit: 'nm',
+            },
+            children: [
+              {
+                id: 'param-gate-cd',
+                parentId: 'method-cdsem',
+                name: 'Gate Line Width CD',
+                code: 'P-GATE-CD',
+                levelLabel: '4단: 측정항목',
+                description: 'Gate 패턴 형성 후 Bottom CD 측정 기준정보',
+                meta: {
+                  defaultMethod: 'CD-SEM',
+                  defaultLsl: 13.2,
+                  defaultTarget: 14.0,
+                  defaultUsl: 14.8,
+                  unit: 'nm',
+                },
+              },
+              {
+                id: 'param-fin-pitch',
+                parentId: 'method-cdsem',
+                name: 'Fin Pitch Uniformity',
+                code: 'P-FIN-PITCH',
+                levelLabel: '4단: 측정항목',
+                description: 'FinFET 구조 Pitch 간격 균일도 분석',
+                meta: {
+                  defaultMethod: 'CD-SEM',
+                  defaultLsl: 22.0,
+                  defaultTarget: 24.0,
+                  defaultUsl: 26.0,
+                  unit: 'nm',
+                },
+              },
+            ],
+          },
+          {
+            id: 'method-overlay',
+            parentId: 'proc-litho',
+            name: 'Optical Overlay (정렬도 분석)',
+            code: 'M-OVL',
+            levelLabel: '3단: 분석기법',
+            isExpanded: true,
+            meta: {
+              defaultMethod: 'IBO-Overlay',
+              defaultLsl: -2.5,
+              defaultTarget: 0.0,
+              defaultUsl: 2.5,
+              unit: 'nm',
+            },
+            children: [
+              {
+                id: 'param-ovl-xy',
+                parentId: 'method-overlay',
+                name: 'X/Y Shift Misalignment',
+                code: 'P-OVL-XY',
+                levelLabel: '4단: 측정항목',
+                meta: {
+                  defaultMethod: 'IBO-Overlay',
+                  defaultLsl: -2.0,
+                  defaultTarget: 0.0,
+                  defaultUsl: 2.0,
+                  unit: 'nm',
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: 'proc-thinfilm',
+        parentId: 'root-feol',
+        name: 'Thin Film / Deposition',
+        code: 'TF-DEP',
+        levelLabel: '2단: 공정',
+        isExpanded: true,
+        children: [
+          {
+            id: 'method-xrr',
+            parentId: 'proc-thinfilm',
+            name: 'XRR / Ellipsometry (박막 두께 분석)',
+            code: 'M-XRR',
+            levelLabel: '3단: 분석기법',
+            isExpanded: true,
+            meta: {
+              defaultMethod: 'Spectroscopic Ellipsometry',
+              defaultLsl: 18.0,
+              defaultTarget: 20.0,
+              defaultUsl: 22.0,
+              unit: 'Å',
+            },
+            children: [
+              {
+                id: 'param-hk-thk',
+                parentId: 'method-xrr',
+                name: 'High-K Dielectric Thickness',
+                code: 'P-HK-THK',
+                levelLabel: '4단: 측정항목',
+                meta: {
+                  defaultMethod: 'Spectroscopic Ellipsometry',
+                  defaultLsl: 18.5,
+                  defaultTarget: 20.0,
+                  defaultUsl: 21.5,
+                  unit: 'Å',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'root-beol',
+    parentId: null,
+    name: 'BEOL (배선 및 금속 오염 분석)',
+    code: 'BEOL',
+    levelLabel: '1단: 공정군',
+    isExpanded: true,
+    children: [
+      {
+        id: 'proc-cmp',
+        parentId: 'root-beol',
+        name: 'Cu Interconnect & CMP',
+        code: 'CU-CMP',
+        levelLabel: '2단: 공정',
+        isExpanded: true,
+        children: [
+          {
+            id: 'method-icpms',
+            parentId: 'proc-cmp',
+            name: 'VPD-ICP-MS (극미량 금속오염 분석)',
+            code: 'M-ICPMS',
+            levelLabel: '3단: 분석기법',
+            isExpanded: true,
+            children: [
+              {
+                id: 'param-trace-cu',
+                parentId: 'method-icpms',
+                name: 'Surface Trace Cu/Fe Concentration',
+                code: 'P-TRACE-MT',
+                levelLabel: '4단: 측정항목',
+                meta: {
+                  defaultMethod: 'VPD-ICP-MS',
+                  defaultLsl: 0.0,
+                  defaultTarget: 0.5,
+                  defaultUsl: 5.0,
+                  unit: 'E9 atoms/cm²',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+];
+
+// 초기 말단 노드 수천 건 시뮬레이션 데이터 생성 (2,500건)
+function generateInitialSpecItems(): SpecItemRecord[] {
+  const leafConfigs = [
+    {
+      nodeId: 'param-gate-cd',
+      prefix: 'D5-16G-GATE',
+      namePrefix: 'DDR5 16Gb Gate Wafer Item',
+      method: 'CD-SEM',
+      lsl: 13.2,
+      target: 14.0,
+      usl: 14.8,
+      unit: 'nm',
+      count: 1400,
+    },
+    {
+      nodeId: 'param-fin-pitch',
+      prefix: 'AP-3NM-FIN',
+      namePrefix: '3nm Logic FinFET Item',
+      method: 'CD-SEM',
+      lsl: 22.0,
+      target: 24.0,
+      usl: 26.0,
+      unit: 'nm',
+      count: 600,
+    },
+    {
+      nodeId: 'param-ovl-xy',
+      prefix: 'HBM3E-OVL',
+      namePrefix: 'HBM3E TSV Overlay Target Item',
+      method: 'IBO-Overlay',
+      lsl: -2.0,
+      target: 0.0,
+      usl: 2.0,
+      unit: 'nm',
+      count: 300,
+    },
+    {
+      nodeId: 'param-hk-thk',
+      prefix: 'HK-OX-ITEM',
+      namePrefix: 'High-K HfO2 Film Monitor Item',
+      method: 'Ellipsometry',
+      lsl: 18.5,
+      target: 20.0,
+      usl: 21.5,
+      unit: 'Å',
+      count: 150,
+    },
+    {
+      nodeId: 'param-trace-cu',
+      prefix: 'BEOL-CLN',
+      namePrefix: 'Post-CMP Clean Monitor Item',
+      method: 'VPD-ICP-MS',
+      lsl: 0.0,
+      target: 0.5,
+      usl: 5.0,
+      unit: 'E9 atoms/cm²',
+      count: 100,
+    },
+  ];
+
+  const samplingRules = ['매 Lot 5매 (5 Wafer/Lot)', '전수 검사 (100%)', 'Skip Lot (1/3 Lot)'];
+  const statuses: Array<'ACTIVE' | 'REVIEW' | 'HOLD'> = ['ACTIVE', 'ACTIVE', 'ACTIVE', 'ACTIVE', 'REVIEW', 'HOLD'];
+
+  const list: SpecItemRecord[] = [];
+  for (const cfg of leafConfigs) {
+    for (let i = 1; i <= cfg.count; i++) {
+      const codeNum = String(i).padStart(4, '0');
+      const itemCode = `${cfg.prefix}-${codeNum}`;
+      // 일부 아이템은 미세하게 커스텀 USL/LSL 편차를 가짐
+      const offset = i % 15 === 0 ? 0.2 : 0;
+      list.push({
+        id: itemCode,
+        nodeId: cfg.nodeId,
+        itemCode,
+        itemName: `${cfg.namePrefix} #${codeNum}`,
+        analysisMethod: cfg.method,
+        lsl: Number((cfg.lsl + offset).toFixed(2)),
+        targetValue: cfg.target,
+        usl: Number((cfg.usl - offset).toFixed(2)),
+        unit: cfg.unit,
+        samplingRule: samplingRules[i % samplingRules.length],
+        status: statuses[i % statuses.length],
+        remarks: i % 15 === 0 ? '고객사 특별 규격(Tight Spec) 적용 항목' : '표준 양산 기준정보 적용',
+      });
+    }
+  }
+  return list;
+}
+
+export const analysisSpecDomainConfig: MasterDataDomainConfig<
+  SpecItemRecord,
+  SpecNodeMeta
+> = {
+  domainKey: 'analysis-spec',
+  title: '분석 기법 및 규격(USL/LSL) 기준정보',
+  subtitle: 'N단 공정/분석기법 트리 및 수천 개 적용 아이템의 상·하한 규격(USL/LSL) 관리',
+  treeTitle: '공정 · 분석기법 분류',
+  treeData: specTreeData,
+  items: generateInitialSpecItems(),
+  searchKeys: ['itemCode', 'itemName', 'analysisMethod', 'samplingRule'],
+  statusFilterConfig: {
+    fieldKey: 'status',
+    options: [
+      { label: '양산 적용(Active)', value: 'ACTIVE' },
+      { label: '검토중(Review)', value: 'REVIEW' },
+      { label: '보류(Hold)', value: 'HOLD' },
+    ],
+  },
+  nodeMetaSchema: [
+    {
+      key: 'defaultMethod',
+      label: '기본 분석 기법 (Analysis Method)',
+      type: 'select',
+      options: [
+        { label: 'CD-SEM', value: 'CD-SEM' },
+        { label: 'IBO-Overlay', value: 'IBO-Overlay' },
+        { label: 'Spectroscopic Ellipsometry', value: 'Spectroscopic Ellipsometry' },
+        { label: 'XRR / XRD', value: 'XRR / XRD' },
+        { label: 'VPD-ICP-MS', value: 'VPD-ICP-MS' },
+        { label: 'TEM / EDX', value: 'TEM / EDX' },
+      ],
+    },
+    { key: 'defaultLsl', label: '노드 기본 LSL (하한)', type: 'number', step: 0.1 },
+    { key: 'defaultTarget', label: '노드 기본 Target (목표값)', type: 'number', step: 0.1 },
+    { key: 'defaultUsl', label: '노드 기본 USL (상한)', type: 'number', step: 0.1 },
+    { key: 'unit', label: '측정 단위 (Unit)', type: 'text', placeholder: 'nm, Å, %, ppm 등' },
+  ],
+  renderNodeSummary: (node, itemCount) => {
+    const meta = node.meta;
+    return (
+      <Card variant="muted" padding={2}>
+        <HStack gap={4} vAlign="center" hAlign="between">
+          <HStack gap={3} vAlign="center">
+            <Text type="supporting" color="secondary">
+              기본 분석기법:{' '}
+              <strong>{meta?.defaultMethod || '하위 노드별 지정'}</strong>
+            </Text>
+            {meta?.defaultLsl !== undefined && meta?.defaultUsl !== undefined && (
+              <HStack gap={2} vAlign="center">
+                <Badge
+                  variant="teal"
+                  label={`기본 규격: LSL ${meta.defaultLsl} / Target ${meta.defaultTarget ?? '-'} / USL ${meta.defaultUsl} (${meta.unit ?? ''})`}
+                />
+              </HStack>
+            )}
+            {node.description && (
+              <Text type="supporting" color="secondary">
+                · {node.description}
+              </Text>
+            )}
+          </HStack>
+          <Text type="supporting" color="secondary">
+            매핑된 대상 아이템 <strong>{itemCount.toLocaleString()}</strong>개
+          </Text>
+        </HStack>
+      </Card>
+    );
+  },
+  // 가상화(Virtualization) 성능을 극대화하면서 한눈에 들어오도록 핵심 6개 컬럼만 간결하게 표시
+  columns: [
+    {
+      key: 'itemCode',
+      header: '아이템 코드',
+      width: pixel(175),
+      sortable: true,
+    },
+    {
+      key: 'itemName',
+      header: '적용 아이템 명칭',
+      width: proportional(1.6, { minWidth: 180 }),
+      sortable: true,
+    },
+    {
+      key: 'analysisMethod',
+      header: '분석 기법',
+      width: pixel(135),
+      sortable: true,
+    },
+    {
+      key: 'lsl',
+      header: 'LSL (하한)',
+      width: pixel(100),
+      align: 'end',
+      sortable: true,
+    },
+    {
+      key: 'targetValue',
+      header: 'Target',
+      width: pixel(95),
+      align: 'end',
+      sortable: true,
+    },
+    {
+      key: 'usl',
+      header: 'USL (상한)',
+      width: pixel(100),
+      align: 'end',
+      sortable: true,
+    },
+    {
+      key: 'unit',
+      header: '단위',
+      width: pixel(80),
+      align: 'center',
+    },
+    {
+      key: 'status',
+      header: '적용 상태',
+      width: pixel(110),
+      align: 'center',
+      sortable: true,
+    },
+  ],
+  formSchema: [
+    {
+      key: 'itemCode',
+      label: '아이템 코드 (Item ID)',
+      type: 'text',
+      required: true,
+      readOnlyOnEdit: true,
+      placeholder: '예: D5-16G-GATE-2501',
+      section: '1. 대상 아이템 및 분석 기법',
+    },
+    {
+      key: 'itemName',
+      label: '아이템 명칭',
+      type: 'text',
+      required: true,
+      placeholder: '예: DDR5 16Gb Gate Wafer Item #2501',
+      section: '1. 대상 아이템 및 분석 기법',
+    },
+    {
+      key: 'analysisMethod',
+      label: '적용 분석 기법 (Analysis Method)',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'CD-SEM (임계치수 전자현미경)', value: 'CD-SEM' },
+        { label: 'IBO-Overlay (광학 정렬도 분석)', value: 'IBO-Overlay' },
+        { label: 'Ellipsometry (박막 두께 분석)', value: 'Ellipsometry' },
+        { label: 'XRR / XRD (박막 밀도/결정성)', value: 'XRR / XRD' },
+        { label: 'VPD-ICP-MS (금속 오염 분석)', value: 'VPD-ICP-MS' },
+        { label: 'TEM-EDX (단면 구조/성분 분석)', value: 'TEM-EDX' },
+      ],
+      section: '1. 대상 아이템 및 분석 기법',
+    },
+    {
+      key: 'lsl',
+      label: 'LSL (Lower Spec Limit, 하한 규격)',
+      type: 'number',
+      required: true,
+      step: 0.1,
+      description: '하한 임계치 미만 측정 시 Out-of-Spec 알람 발생',
+      section: '2. 상·하한 규격 (USL / LSL / Target)',
+    },
+    {
+      key: 'targetValue',
+      label: 'Target (목표 중심값)',
+      type: 'number',
+      required: true,
+      step: 0.1,
+      section: '2. 상·하한 규격 (USL / LSL / Target)',
+    },
+    {
+      key: 'usl',
+      label: 'USL (Upper Spec Limit, 상한 규격)',
+      type: 'number',
+      required: true,
+      step: 0.1,
+      description: '상한 임계치 초과 측정 시 Out-of-Spec 알람 발생',
+      section: '2. 상·하한 규격 (USL / LSL / Target)',
+    },
+    {
+      key: 'unit',
+      label: '측정 단위 (Unit)',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'nm (나노미터)', value: 'nm' },
+        { label: 'Å (옹스트롬)', value: 'Å' },
+        { label: 'µm (마이크로미터)', value: 'µm' },
+        { label: 'E9 atoms/cm²', value: 'E9 atoms/cm²' },
+        { label: '% (퍼센트)', value: '%' },
+      ],
+      section: '2. 상·하한 규격 (USL / LSL / Target)',
+    },
+    {
+      key: 'samplingRule',
+      label: '샘플링 주기',
+      type: 'select',
+      options: [
+        { label: '매 Lot 5매 (5 Wafer/Lot)', value: '매 Lot 5매 (5 Wafer/Lot)' },
+        { label: '전수 검사 (100%)', value: '전수 검사 (100%)' },
+        { label: 'Skip Lot (1/3 Lot)', value: 'Skip Lot (1/3 Lot)' },
+      ],
+      section: '3. 운영 정책 및 비고',
+    },
+    {
+      key: 'status',
+      label: '운영 상태',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'ACTIVE (양산 적용)', value: 'ACTIVE' },
+        { label: 'REVIEW (엔지니어 검토중)', value: 'REVIEW' },
+        { label: 'HOLD (적용 보류)', value: 'HOLD' },
+      ],
+      section: '3. 운영 정책 및 비고',
+    },
+    {
+      key: 'remarks',
+      label: '비고 / 특이사항',
+      type: 'textarea',
+      placeholder: '예외 규격 사유 또는 변경 이력을 메모하세요.',
+      section: '3. 운영 정책 및 비고',
+    },
+  ],
+  createDefaultItem: (selectedNode, currentCount) => {
+    const seq = String(currentCount + 1).padStart(4, '0');
+    const codePrefix = selectedNode.code || 'ITEM';
+    const meta = selectedNode.meta;
+    return {
+      id: `${codePrefix}-${seq}`,
+      itemCode: `${codePrefix}-${seq}`,
+      itemName: `${selectedNode.name} 적용 아이템 #${seq}`,
+      analysisMethod: meta?.defaultMethod ?? 'CD-SEM',
+      lsl: meta?.defaultLsl ?? 10.0,
+      targetValue: meta?.defaultTarget ?? 12.0,
+      usl: meta?.defaultUsl ?? 14.0,
+      unit: meta?.unit ?? 'nm',
+      samplingRule: '매 Lot 5매 (5 Wafer/Lot)',
+      status: 'ACTIVE',
+      remarks: '',
+    };
+  },
+};
+
+/**
+ * [예시 2] 다른 페이지에 동일 템플릿을 그대로 재사용한 사례:
+ * 계측 설비 · 챔버 · 센서 파라미터 기준정보 (Config만 교체하여 동일 레이아웃 재사용)
+ */
+export interface EquipmentSensorRecord extends BaseRecordItem {
+  id: string;
+  nodeId: string;
+  sensorCode: string;
+  sensorName: string;
+  dataType: string;
+  pollingIntervalSec: number;
+  calibrationCycleDays: number;
+  status: 'ONLINE' | 'MAINT' | 'OFFLINE';
+  description?: string;
+}
+
+const equipmentTreeData: HierarchyNode[] = [
+  {
+    id: 'fab-m16',
+    parentId: null,
+    name: 'FAB Line 1 (양산 1라인)',
+    code: 'FAB-L1',
+    levelLabel: '1단: FAB 라인',
+    isExpanded: true,
+    children: [
+      {
+        id: 'bay-metrology',
+        parentId: 'fab-m16',
+        name: 'Bay A-04 (계측/분석 장비 구역)',
+        code: 'BAY-A04',
+        levelLabel: '2단: Bay',
+        isExpanded: true,
+        children: [
+          {
+            id: 'eqp-cdsem-01',
+            parentId: 'bay-metrology',
+            name: 'CD-SEM 호기 #01 (CG6300)',
+            code: 'EQP-SEM01',
+            levelLabel: '3단: 설비(EQP)',
+            isExpanded: true,
+            children: [
+              {
+                id: 'mod-e-gun',
+                parentId: 'eqp-cdsem-01',
+                name: 'Electron Optics Column',
+                code: 'MOD-COL',
+                levelLabel: '4단: 모듈/유닛',
+              },
+              {
+                id: 'mod-vac-chamber',
+                parentId: 'eqp-cdsem-01',
+                name: 'High Vacuum Sample Chamber',
+                code: 'MOD-VAC',
+                levelLabel: '4단: 모듈/유닛',
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+];
+
+function generateInitialEquipmentItems(): EquipmentSensorRecord[] {
+  const list: EquipmentSensorRecord[] = [];
+  const statuses: Array<'ONLINE' | 'MAINT' | 'OFFLINE'> = ['ONLINE', 'ONLINE', 'ONLINE', 'MAINT', 'OFFLINE'];
+
+  for (let i = 1; i <= 400; i++) {
+    const num = String(i).padStart(4, '0');
+    const isColumn = i % 2 === 0;
+    list.push({
+      id: `SNS-${num}`,
+      nodeId: isColumn ? 'mod-e-gun' : 'mod-vac-chamber',
+      sensorCode: `SNS-${num}`,
+      sensorName: isColumn
+        ? `Beam Acceleration Voltage Sensor #${num}`
+        : `Chamber Turbo Pump Pressure Gauge #${num}`,
+      dataType: isColumn ? 'FLOAT (kV)' : 'FLOAT (Torr)',
+      pollingIntervalSec: isColumn ? 1 : 5,
+      calibrationCycleDays: 90,
+      status: statuses[i % statuses.length],
+      description: 'FDC 실시간 수집 대상 센서 채널',
+    });
+  }
+  return list;
+}
+
+export const equipmentMasterDomainConfig: MasterDataDomainConfig<EquipmentSensorRecord> = {
+  domainKey: 'equipment-sensor',
+  title: '계측 설비 · 모듈 · 센서 채널 기준정보',
+  subtitle: '동일한 MasterDataCrudTemplate에 설정(Config)만 교체하여 다른 기준정보 페이지를 구성한 예시',
+  treeTitle: '라인 · 설비 · 모듈 트리',
+  treeData: equipmentTreeData,
+  items: generateInitialEquipmentItems(),
+  searchKeys: ['sensorCode', 'sensorName', 'dataType'],
+  statusFilterConfig: {
+    fieldKey: 'status',
+    options: [
+      { label: '수집중(Online)', value: 'ONLINE' },
+      { label: '점검(Maint)', value: 'MAINT' },
+      { label: '중지(Offline)', value: 'OFFLINE' },
+    ],
+  },
+  columns: [
+    { key: 'sensorCode', header: '센서 채널 코드', width: pixel(150), sortable: true },
+    {
+      key: 'sensorName',
+      header: '센서 / 파라미터 명칭',
+      width: proportional(1.6, { minWidth: 200 }),
+      sortable: true,
+    },
+    { key: 'dataType', header: '데이터 타입', width: pixel(130), sortable: true },
+    {
+      key: 'pollingIntervalSec',
+      header: '수집 주기(초)',
+      width: pixel(120),
+      align: 'end',
+      sortable: true,
+    },
+    {
+      key: 'calibrationCycleDays',
+      header: '교정 주기(일)',
+      width: pixel(120),
+      align: 'end',
+      sortable: true,
+    },
+    { key: 'status', header: '상태', width: pixel(110), align: 'center', sortable: true },
+  ],
+  formSchema: [
+    {
+      key: 'sensorCode',
+      label: '센서 채널 코드',
+      type: 'text',
+      required: true,
+      readOnlyOnEdit: true,
+      section: '1. 센서 기본 식별 정보',
+    },
+    {
+      key: 'sensorName',
+      label: '센서 명칭',
+      type: 'text',
+      required: true,
+      section: '1. 센서 기본 식별 정보',
+    },
+    {
+      key: 'dataType',
+      label: '데이터 수집 타입',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'FLOAT (kV)', value: 'FLOAT (kV)' },
+        { label: 'FLOAT (Torr)', value: 'FLOAT (Torr)' },
+        { label: 'INTEGER (RPM)', value: 'INTEGER (RPM)' },
+      ],
+      section: '2. 수집 및 교정 정책',
+    },
+    {
+      key: 'pollingIntervalSec',
+      label: 'FDC 수집 주기',
+      type: 'number',
+      units: 'sec',
+      step: 1,
+      min: 1,
+      required: true,
+      section: '2. 수집 및 교정 정책',
+    },
+    {
+      key: 'calibrationCycleDays',
+      label: '정기 교정 주기',
+      type: 'number',
+      units: 'days',
+      step: 30,
+      min: 1,
+      required: true,
+      section: '2. 수집 및 교정 정책',
+    },
+    {
+      key: 'status',
+      label: '채널 상태',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'ONLINE (수집중)', value: 'ONLINE' },
+        { label: 'MAINT (예방점검)', value: 'MAINT' },
+        { label: 'OFFLINE (비활성)', value: 'OFFLINE' },
+      ],
+      section: '2. 수집 및 교정 정책',
+    },
+    {
+      key: 'description',
+      label: '설명',
+      type: 'textarea',
+      section: '2. 수집 및 교정 정책',
+    },
+  ],
+  createDefaultItem: (selectedNode, currentCount) => {
+    const seq = String(currentCount + 1).padStart(4, '0');
+    return {
+      id: `SNS-${seq}`,
+      sensorCode: `SNS-${seq}`,
+      sensorName: `${selectedNode.name} 센서 채널 #${seq}`,
+      dataType: 'FLOAT (kV)',
+      pollingIntervalSec: 1,
+      calibrationCycleDays: 90,
+      status: 'ONLINE',
+      description: '',
+    };
+  },
+};
+
+/**
+ * [예시 3] 스프레드시트 입출력(Spreadsheet I/O) 전용 템플릿 설정 예시
+ * - 메인 화면에서 바로 엑셀처럼 셀 클릭/방향키로 USL, LSL, Target, 분석기법을 대량 편집하고
+ *   엑셀 복사·붙여넣기(TSV/CSV) 및 열 일괄 채우기를 수행하는 페이지
+ */
+export const analysisSpreadsheetDomainConfig: SpreadsheetDomainConfig<
+  SpecItemRecord,
+  SpecNodeMeta
+> = {
+  domainKey: 'analysis-spec-sheet',
+  title: '분석기법 · USL/LSL 스프레드시트 대량 입출력',
+  subtitle:
+    '메인 그리드에서 엑셀처럼 직접 셀을 편집하고 Ctrl+C / Ctrl+V로 수천 건의 규격(USL/LSL)을 일괄 입출력하는 템플릿',
+  treeTitle: '공정 · 분석기법 분류',
+  treeData: specTreeData,
+  items: generateInitialSpecItems(),
+  searchKeys: ['itemCode', 'itemName', 'analysisMethod', 'samplingRule'],
+  nodeMetaSchema: analysisSpecDomainConfig.nodeMetaSchema,
+  columns: [
+    {
+      key: 'itemCode',
+      header: '아이템 코드',
+      type: 'text',
+      width: 170,
+      required: true,
+    },
+    {
+      key: 'itemName',
+      header: '적용 아이템 명칭',
+      type: 'text',
+      width: 240,
+      required: true,
+    },
+    {
+      key: 'analysisMethod',
+      header: '분석 기법',
+      type: 'select',
+      width: 145,
+      required: true,
+      options: [
+        { label: 'CD-SEM', value: 'CD-SEM' },
+        { label: 'IBO-Overlay', value: 'IBO-Overlay' },
+        { label: 'Ellipsometry', value: 'Ellipsometry' },
+        { label: 'XRR / XRD', value: 'XRR / XRD' },
+        { label: 'VPD-ICP-MS', value: 'VPD-ICP-MS' },
+        { label: 'TEM-EDX', value: 'TEM-EDX' },
+      ],
+    },
+    {
+      key: 'lsl',
+      header: 'LSL (하한)',
+      type: 'number',
+      width: 110,
+      align: 'end',
+      step: 0.1,
+      required: true,
+      validate: (val, row) => {
+        if (Number(val) > Number(row.usl)) {
+          return '하한(LSL)이 상한(USL)보다 클 수 없습니다.';
+        }
+        return null;
+      },
+    },
+    {
+      key: 'targetValue',
+      header: 'Target',
+      type: 'number',
+      width: 105,
+      align: 'end',
+      step: 0.1,
+      required: true,
+      validate: (val, row) => {
+        const num = Number(val);
+        if (num < Number(row.lsl) || num > Number(row.usl)) {
+          return 'Target 값은 LSL과 USL 사이여야 합니다.';
+        }
+        return null;
+      },
+    },
+    {
+      key: 'usl',
+      header: 'USL (상한)',
+      type: 'number',
+      width: 110,
+      align: 'end',
+      step: 0.1,
+      required: true,
+      validate: (val, row) => {
+        if (Number(val) < Number(row.lsl)) {
+          return '상한(USL)이 하한(LSL)보다 작을 수 없습니다.';
+        }
+        return null;
+      },
+    },
+    {
+      key: 'unit',
+      header: '단위',
+      type: 'select',
+      width: 95,
+      align: 'center',
+      options: [
+        { label: 'nm', value: 'nm' },
+        { label: 'Å', value: 'Å' },
+        { label: 'µm', value: 'µm' },
+        { label: 'E9 atoms/cm²', value: 'E9 atoms/cm²' },
+        { label: '%', value: '%' },
+      ],
+    },
+    {
+      key: 'samplingRule',
+      header: '샘플링 주기',
+      type: 'select',
+      width: 165,
+      options: [
+        { label: '매 Lot 5매 (5 Wafer/Lot)', value: '매 Lot 5매 (5 Wafer/Lot)' },
+        { label: '전수 검사 (100%)', value: '전수 검사 (100%)' },
+        { label: 'Skip Lot (1/3 Lot)', value: 'Skip Lot (1/3 Lot)' },
+      ],
+    },
+    {
+      key: 'status',
+      header: '적용 상태',
+      type: 'select',
+      width: 105,
+      align: 'center',
+      options: [
+        { label: 'ACTIVE', value: 'ACTIVE' },
+        { label: 'REVIEW', value: 'REVIEW' },
+        { label: 'HOLD', value: 'HOLD' },
+      ],
+    },
+  ],
+  createEmptyRow: (selectedNode, nextIndex) => {
+    const seq = String(nextIndex).padStart(4, '0');
+    const prefix = selectedNode.code || 'ITEM';
+    const code = `${prefix}-NEW-${seq}`;
+    const meta = selectedNode.meta;
+    return {
+      id: code,
+      nodeId: selectedNode.id,
+      itemCode: code,
+      itemName: `${selectedNode.name} 신규 아이템 #${seq}`,
+      analysisMethod: meta?.defaultMethod ?? 'CD-SEM',
+      lsl: meta?.defaultLsl ?? 13.0,
+      targetValue: meta?.defaultTarget ?? 14.0,
+      usl: meta?.defaultUsl ?? 15.0,
+      unit: meta?.unit ?? 'nm',
+      samplingRule: '매 Lot 5매 (5 Wafer/Lot)',
+      status: 'ACTIVE',
+      remarks: '',
+    };
+  },
+};
+
+/**
+ * [예시 3] 템플릿 3: 상하 분할 마스터 워크벤치 & Dual-List 아이템 셔틀 매핑 설정
+ * - 좌측: 분석 규격 카탈로그
+ * - 우측 상단: 어떤 분석기법을 쓸지, 그 분석기법의 USL / Target / LSL 은 무엇인지 직접 입력 + 스펙 게이지
+ * - 우측 하단: 전체 수천 개 아이템 풀에서 해당 규격을 사용할 아이템들을 좌<->우 셔틀로 대량 매핑
+ */
+function generateWorkbenchPoolItems(total = 3200): WorkbenchPoolItem[] {
+  const families = ['DDR5', 'HBM3E', 'LPDDR5X', '3nm-Logic'];
+  const list: WorkbenchPoolItem[] = [];
+  for (let i = 1; i <= total; i++) {
+    const fam = families[i % families.length];
+    const num = String(i).padStart(4, '0');
+    list.push({
+      id: `ITEM-${fam}-${num}`,
+      itemCode: `${fam}-WAF-${num}`,
+      itemName: `${fam} Production Wafer Lot Target #${num}`,
+      productFamily: fam,
+      waferType: i % 3 === 0 ? 'Monitor Wafer' : 'Product Wafer',
+      overrideLsl: i % 25 === 0 ? 13.4 : null,
+      overrideUsl: i % 25 === 0 ? 14.6 : null,
+    });
+  }
+  return list;
+}
+
+const initialPool = generateWorkbenchPoolItems(3200);
+
+export const specWorkbenchDomainConfig: SpecWorkbenchDomainConfig = {
+  domainKey: 'spec-workbench',
+  title: '분석기법 · USL/LSL 마스터 워크벤치 & 대상 아이템 매핑',
+  subtitle:
+    '상단에서 분석기법과 USL/LSL을 설정하고, 하단 셔틀에서 적용할 수천 개의 아이템을 좌↔우로 할당하는 템플릿',
+  categories: [
+    { id: 'cat-litho', name: 'Photo / Litho', code: 'LITHO', groupName: 'FEOL' },
+    { id: 'cat-etch', name: 'Dry Etch', code: 'ETCH', groupName: 'FEOL' },
+    { id: 'cat-tf', name: 'Thin Film', code: 'THINFILM', groupName: 'FEOL' },
+    { id: 'cat-cmp', name: 'Cu / CMP', code: 'CMP', groupName: 'BEOL' },
+  ],
+  rules: [
+    {
+      id: 'rule-gate-cd',
+      categoryId: 'cat-litho',
+      ruleCode: 'SPEC-LITHO-001',
+      ruleName: 'Gate Bottom CD 정밀 계측 규격',
+      analysisMethod: 'CD-SEM',
+      lsl: 13.2,
+      target: 14.0,
+      usl: 14.8,
+      unit: 'nm',
+      status: 'ACTIVE',
+    },
+    {
+      id: 'rule-ovl-tsv',
+      categoryId: 'cat-litho',
+      ruleCode: 'SPEC-LITHO-002',
+      ruleName: 'HBM3E TSV Layer Overlay 정렬도 규격',
+      analysisMethod: 'IBO-Overlay',
+      lsl: -2.0,
+      target: 0.0,
+      usl: 2.0,
+      unit: 'nm',
+      status: 'ACTIVE',
+    },
+    {
+      id: 'rule-etch-depth',
+      categoryId: 'cat-etch',
+      ruleCode: 'SPEC-ETCH-001',
+      ruleName: 'STI Trench Etch Depth & Profile 규격',
+      analysisMethod: 'OCD / Scatterometry',
+      lsl: 145.0,
+      target: 150.0,
+      usl: 155.0,
+      unit: 'nm',
+      status: 'ACTIVE',
+    },
+    {
+      id: 'rule-hk-thk',
+      categoryId: 'cat-tf',
+      ruleCode: 'SPEC-TF-001',
+      ruleName: 'High-K HfO2 유전막 두께 분석 규격',
+      analysisMethod: 'Spectroscopic Ellipsometry',
+      lsl: 18.5,
+      target: 20.0,
+      usl: 21.5,
+      unit: 'Å',
+      status: 'ACTIVE',
+    },
+    {
+      id: 'rule-cmp-trace',
+      categoryId: 'cat-cmp',
+      ruleCode: 'SPEC-CMP-001',
+      ruleName: 'Post-CMP 표면 극미량 금속 오염도 규격',
+      analysisMethod: 'VPD-ICP-MS',
+      lsl: 0.0,
+      target: 0.5,
+      usl: 5.0,
+      unit: 'E9 atoms/cm²',
+      status: 'DRAFT',
+    },
+  ],
+  allPoolItems: initialPool,
+  initialRuleItemMap: {
+    'rule-gate-cd': initialPool.slice(0, 1250).map((i) => i.id),
+    'rule-ovl-tsv': initialPool.slice(1250, 1900).map((i) => i.id),
+    'rule-etch-depth': initialPool.slice(1900, 2400).map((i) => i.id),
+    'rule-hk-thk': initialPool.slice(2400, 2750).map((i) => i.id),
+    'rule-cmp-trace': initialPool.slice(2750, 2900).map((i) => i.id),
+  },
+  methodOptions: [
+    { label: 'CD-SEM (임계치수 주사전자현미경)', value: 'CD-SEM' },
+    { label: 'IBO-Overlay (광학 정렬도 분석)', value: 'IBO-Overlay' },
+    { label: 'OCD / Scatterometry (3D 형상 광학계측)', value: 'OCD / Scatterometry' },
+    { label: 'Spectroscopic Ellipsometry (박막 두께)', value: 'Spectroscopic Ellipsometry' },
+    { label: 'XRR / XRD (박막 밀도·결정성)', value: 'XRR / XRD' },
+    { label: 'VPD-ICP-MS (극미량 금속오염)', value: 'VPD-ICP-MS' },
+    { label: 'TEM-EDX (단면 원자구조 분석)', value: 'TEM-EDX' },
+  ],
+  unitOptions: [
+    { label: 'nm', value: 'nm' },
+    { label: 'Å', value: 'Å' },
+    { label: 'µm', value: 'µm' },
+    { label: 'E9 atoms/cm²', value: 'E9 atoms/cm²' },
+    { label: '%', value: '%' },
+  ],
+  productFamilyOptions: [
+    { label: 'DDR5', value: 'DDR5' },
+    { label: 'HBM3E', value: 'HBM3E' },
+    { label: 'LPDDR5X', value: 'LPDDR5X' },
+    { label: '3nm-Logic', value: '3nm-Logic' },
+  ],
+};
+
+
