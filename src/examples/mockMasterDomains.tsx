@@ -14,6 +14,10 @@ import type {
   SpecWorkbenchDomainConfig,
   WorkbenchPoolItem,
 } from '../templates/spec-workbench-crud';
+import type {
+  FlatRecordItem,
+  FlatTableDomainConfig,
+} from '../templates/flat-table-crud';
 
 /**
  * [예시 1] 다단 계층형 분석/규격 기준정보 (USL / LSL / Target 및 수천 개 적용 대상 아이템)
@@ -1061,5 +1065,333 @@ export const specWorkbenchDomainConfig: SpecWorkbenchDomainConfig = {
     { label: '3nm-Logic', value: '3nm-Logic' },
   ],
 };
+
+/**
+ * [예시 4] 템플릿 4: 트리 구조 없이 단순 DB 마스터 테이블을 직접 조회/필터링/페이징/관리하는 설정 예시
+ * (DB 테이블명: TB_ANALYSIS_METHOD_MST - 분석 기법 및 계측 장비 마스터 테이블)
+ */
+export interface FlatAnalysisMethodRecord extends FlatRecordItem {
+  id: string;
+  methodCode: string;
+  methodName: string;
+  processArea: string;
+  equipmentModel: string;
+  vendor: string;
+  defaultUnit: string;
+  standardTatHours: number;
+  ownerTeam: string;
+  updatedAt: string;
+  status: 'ACTIVE' | 'CALIBRATION' | 'INACTIVE';
+  description?: string;
+}
+
+function generateFlatDbTableRecords(count = 340): FlatAnalysisMethodRecord[] {
+  const processAreas = ['LITHO (노광)', 'ETCH (식각)', 'THIN-FILM (박막)', 'CMP (연마)', 'CLEAN (세정)'];
+  const vendors = ['Hitachi High-Tech', 'KLA Corporation', 'Applied Materials', 'ASML', 'Thermo Fisher', 'Bruker'];
+  const models = ['CG6300 CD-SEM', 'Archer 700 Overlay', 'SpectraFilm F1', 'VeritySEM 5i', 'iCAP RQ ICP-MS', 'Talos F200X TEM'];
+  const units = ['nm', 'Å', 'µm', 'E9 atoms/cm²', '%'];
+  const teams = ['선행계측기술팀', '소자분석1팀', '수율분석파트', '품질보증분석팀'];
+  const statuses: Array<'ACTIVE' | 'CALIBRATION' | 'INACTIVE'> = [
+    'ACTIVE',
+    'ACTIVE',
+    'ACTIVE',
+    'ACTIVE',
+    'CALIBRATION',
+    'INACTIVE',
+  ];
+
+  const list: FlatAnalysisMethodRecord[] = [];
+  for (let i = 1; i <= count; i++) {
+    const seq = String(i).padStart(4, '0');
+    const area = processAreas[i % processAreas.length];
+    const model = models[i % models.length];
+    const vendor = vendors[i % vendors.length];
+    const unit = units[i % units.length];
+    const team = teams[i % teams.length];
+    const status = statuses[i % statuses.length];
+
+    list.push({
+      id: `MTH-${seq}`,
+      methodCode: `MTH-${seq}`,
+      methodName: `${area.split(' ')[0]} ${model.split(' ')[0]} 표준 분석법 #${seq}`,
+      processArea: area,
+      equipmentModel: model,
+      vendor,
+      defaultUnit: unit,
+      standardTatHours: (i % 8) + 2,
+      ownerTeam: team,
+      updatedAt: `2026-11-${String((i % 20) + 1).padStart(2, '0')}`,
+      status,
+      description: `${vendor} ${model} 장비를 활용한 양산 표준 분석 프로토콜`,
+    });
+  }
+  return list;
+}
+
+export const flatDbTableDomainConfig: FlatTableDomainConfig<FlatAnalysisMethodRecord> = {
+  domainKey: 'flat-db-analysis-method',
+  dbTableName: 'TB_ANALYSIS_METHOD_MST',
+  title: '분석 기법 · 계측 장비 DB 마스터 테이블 관리',
+  subtitle:
+    '트리 구조 없이 단일 RDB 테이블을 다중 조건(공정 구분, 제조사, 담당팀, 상태)으로 조회·페이징·일괄 관리하는 표준 CRUD 템플릿',
+  items: generateFlatDbTableRecords(340),
+  searchKeys: ['methodCode', 'methodName', 'equipmentModel', 'vendor', 'ownerTeam'],
+  selectFilters: [
+    {
+      fieldKey: 'processArea',
+      label: '공정 구분',
+      options: [
+        { label: 'LITHO (노광)', value: 'LITHO (노광)' },
+        { label: 'ETCH (식각)', value: 'ETCH (식각)' },
+        { label: 'THIN-FILM (박막)', value: 'THIN-FILM (박막)' },
+        { label: 'CMP (연마)', value: 'CMP (연마)' },
+        { label: 'CLEAN (세정)', value: 'CLEAN (세정)' },
+      ],
+    },
+    {
+      fieldKey: 'vendor',
+      label: '장비 제조사',
+      options: [
+        { label: 'Hitachi High-Tech', value: 'Hitachi High-Tech' },
+        { label: 'KLA Corporation', value: 'KLA Corporation' },
+        { label: 'Applied Materials', value: 'Applied Materials' },
+        { label: 'ASML', value: 'ASML' },
+        { label: 'Thermo Fisher', value: 'Thermo Fisher' },
+        { label: 'Bruker', value: 'Bruker' },
+      ],
+    },
+    {
+      fieldKey: 'ownerTeam',
+      label: '담당 부서',
+      options: [
+        { label: '선행계측기술팀', value: '선행계측기술팀' },
+        { label: '소자분석1팀', value: '소자분석1팀' },
+        { label: '수율분석파트', value: '수율분석파트' },
+        { label: '품질보증분석팀', value: '품질보증분석팀' },
+      ],
+    },
+  ],
+  statusFilterConfig: {
+    fieldKey: 'status',
+    options: [
+      { label: '사용중(Active)', value: 'ACTIVE' },
+      { label: '교정중(Calib)', value: 'CALIBRATION' },
+      { label: '미사용(Inactive)', value: 'INACTIVE' },
+    ],
+  },
+  statMetrics: [
+    {
+      label: '전체 레코드',
+      badgeVariant: 'neutral',
+      computeValue: (all) => `${all.length.toLocaleString()}건`,
+    },
+    {
+      label: '사용중(Active)',
+      badgeVariant: 'teal',
+      computeValue: (all) =>
+        `${all.filter((r) => r.status === 'ACTIVE').length.toLocaleString()}건`,
+    },
+    {
+      label: '교정중(Calib)',
+      badgeVariant: 'orange',
+      computeValue: (all) =>
+        `${all.filter((r) => r.status === 'CALIBRATION').length.toLocaleString()}건`,
+    },
+  ],
+  columns: [
+    {
+      key: 'methodCode',
+      header: '분석기법 코드 (PK)',
+      width: pixel(150),
+      sortable: true,
+    },
+    {
+      key: 'methodName',
+      header: '표준 분석기법 명칭',
+      width: proportional(1.6, { minWidth: 220 }),
+      sortable: true,
+    },
+    {
+      key: 'processArea',
+      header: '공정 구분',
+      width: pixel(140),
+      sortable: true,
+    },
+    {
+      key: 'equipmentModel',
+      header: '표준 계측 장비 모델',
+      width: proportional(1.1, { minWidth: 160 }),
+      sortable: true,
+    },
+    {
+      key: 'vendor',
+      header: '제조사',
+      width: pixel(145),
+      sortable: true,
+    },
+    {
+      key: 'defaultUnit',
+      header: '기본 단위',
+      width: pixel(95),
+      align: 'center',
+    },
+    {
+      key: 'standardTatHours',
+      header: '표준 TAT(시간)',
+      width: pixel(115),
+      align: 'end',
+      sortable: true,
+    },
+    {
+      key: 'ownerTeam',
+      header: '담당 부서',
+      width: pixel(130),
+      sortable: true,
+    },
+    {
+      key: 'updatedAt',
+      header: '최종 수정일',
+      width: pixel(110),
+      align: 'center',
+      sortable: true,
+    },
+    {
+      key: 'status',
+      header: '사용 상태',
+      width: pixel(115),
+      align: 'center',
+      sortable: true,
+    },
+  ],
+  formSchema: [
+    {
+      key: 'methodCode',
+      label: '분석기법 코드 (Primary Key)',
+      type: 'text',
+      required: true,
+      readOnlyOnEdit: true,
+      placeholder: '예: MTH-0341',
+      section: '1. DB 레코드 식별 정보',
+    },
+    {
+      key: 'methodName',
+      label: '표준 분석기법 명칭',
+      type: 'text',
+      required: true,
+      placeholder: '예: LITHO CG6300 표준 분석법',
+      section: '1. DB 레코드 식별 정보',
+    },
+    {
+      key: 'processArea',
+      label: '적용 공정 구분',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'LITHO (노광)', value: 'LITHO (노광)' },
+        { label: 'ETCH (식각)', value: 'ETCH (식각)' },
+        { label: 'THIN-FILM (박막)', value: 'THIN-FILM (박막)' },
+        { label: 'CMP (연마)', value: 'CMP (연마)' },
+        { label: 'CLEAN (세정)', value: 'CLEAN (세정)' },
+      ],
+      section: '1. DB 레코드 식별 정보',
+    },
+    {
+      key: 'equipmentModel',
+      label: '표준 계측 장비 모델명',
+      type: 'text',
+      required: true,
+      placeholder: '예: CG6300 CD-SEM',
+      section: '2. 계측 장비 및 단위 스펙',
+    },
+    {
+      key: 'vendor',
+      label: '장비 제조사 (Vendor)',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'Hitachi High-Tech', value: 'Hitachi High-Tech' },
+        { label: 'KLA Corporation', value: 'KLA Corporation' },
+        { label: 'Applied Materials', value: 'Applied Materials' },
+        { label: 'ASML', value: 'ASML' },
+        { label: 'Thermo Fisher', value: 'Thermo Fisher' },
+        { label: 'Bruker', value: 'Bruker' },
+      ],
+      section: '2. 계측 장비 및 단위 스펙',
+    },
+    {
+      key: 'defaultUnit',
+      label: '기본 측정 단위',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'nm', value: 'nm' },
+        { label: 'Å', value: 'Å' },
+        { label: 'µm', value: 'µm' },
+        { label: 'E9 atoms/cm²', value: 'E9 atoms/cm²' },
+        { label: '%', value: '%' },
+      ],
+      section: '2. 계측 장비 및 단위 스펙',
+    },
+    {
+      key: 'standardTatHours',
+      label: '표준 분석 소요시간 (TAT)',
+      type: 'number',
+      units: '시간(hr)',
+      step: 1,
+      min: 1,
+      required: true,
+      section: '2. 계측 장비 및 단위 스펙',
+    },
+    {
+      key: 'ownerTeam',
+      label: '관리 담당 부서',
+      type: 'select',
+      required: true,
+      options: [
+        { label: '선행계측기술팀', value: '선행계측기술팀' },
+        { label: '소자분석1팀', value: '소자분석1팀' },
+        { label: '수율분석파트', value: '수율분석파트' },
+        { label: '품질보증분석팀', value: '품질보증분석팀' },
+      ],
+      section: '3. 운영 부서 및 상태',
+    },
+    {
+      key: 'status',
+      label: '사용 상태',
+      type: 'select',
+      required: true,
+      options: [
+        { label: 'ACTIVE (정상 사용)', value: 'ACTIVE' },
+        { label: 'CALIBRATION (교정/점검중)', value: 'CALIBRATION' },
+        { label: 'INACTIVE (사용 중지)', value: 'INACTIVE' },
+      ],
+      section: '3. 운영 부서 및 상태',
+    },
+    {
+      key: 'description',
+      label: '상세 설명 / 비고',
+      type: 'textarea',
+      section: '3. 운영 부서 및 상태',
+    },
+  ],
+  createDefaultItem: (currentCount) => {
+    const seq = String(currentCount + 1).padStart(4, '0');
+    return {
+      id: `MTH-${seq}`,
+      methodCode: `MTH-${seq}`,
+      methodName: `신규 표준 분석기법 #${seq}`,
+      processArea: 'LITHO (노광)',
+      equipmentModel: 'CG6300 CD-SEM',
+      vendor: 'Hitachi High-Tech',
+      defaultUnit: 'nm',
+      standardTatHours: 4,
+      ownerTeam: '선행계측기술팀',
+      updatedAt: '2026-11-21',
+      status: 'ACTIVE',
+      description: '',
+    };
+  },
+};
+
 
 

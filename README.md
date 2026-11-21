@@ -27,14 +27,14 @@ npm run astryx -- component Table
 
 ---
 
-## 2. 제공하는 3가지 공용 CRUD 템플릿 비교
+## 2. 제공하는 4가지 공용 CRUD 템플릿 비교
 
-| 구분 | 1. Table + Slide-over Drawer 폼형 | 2. 스프레드시트(Excel) 대량 I/O형 | 3. 상하 분할 워크벤치 & 좌↔우 셔틀 매핑형 |
-| :--- | :--- | :--- | :--- |
-| **컴포넌트명** | `<MasterDataCrudTemplate />` | `<SpreadsheetCrudTemplate />` | `<SpecWorkbenchCrudTemplate />` |
-| **폴더 경로** | `src/templates/master-crud/` | `src/templates/spreadsheet-crud/` | `src/templates/spec-workbench-crud/` |
-| **화면 구성** | **좌측 N단 트리 + 우측 가상화 조회 테이블**<br>(행 클릭 시에만 우측에서 서랍형 Drawer 입력 폼이 열림) | **좌측 N단 트리 + 우측 인라인 편집 스프레드시트**<br>(엑셀처럼 셀 직접 클릭/방향키 편집 & `Ctrl+C/V` 대량 붙여넣기) | **좌측 규격 카탈로그 + 우측 상단 마스터(분석기법/USL/LSL) 폼 & 스펙 게이지 + 우측 하단 좌↔우 아이템 셔틀** |
-| **추천 사용처** | 한 아이템에 입력할 속성이 많고(10개 이상), 평소에는 깔끔한 리스트로 조회하다가 건별로 안전하게 상세 조회/수정할 때 | 수백~수천 건의 USL/LSL 수치나 기준값을 엑셀에서 복사·붙여넣기 하거나 그리드 위에서 빠르게 연속 수정할 때 | **분석기법과 기본 USL/LSL 규격**을 상단에서 정의하고, 전체 수천 개 아이템 풀에서 **적용 대상 아이템을 좌↔우로 할당(Mapping)**할 때 |
+| 구분 | 1. 트리 + Slide-over Drawer 폼형 | 2. 트리 + 스프레드시트(Excel) 대량 I/O형 | 3. 상하 분할 워크벤치 & 좌↔우 셔틀 매핑형 | 4. 단순 DB 테이블 조회 · 관리형 (Tree 없음) |
+| :--- | :--- | :--- | :--- | :--- |
+| **컴포넌트명** | `<MasterDataCrudTemplate />` | `<SpreadsheetCrudTemplate />` | `<SpecWorkbenchCrudTemplate />` | `<FlatTableCrudTemplate />` |
+| **폴더 경로** | `src/templates/master-crud/` | `src/templates/spreadsheet-crud/` | `src/templates/spec-workbench-crud/` | `src/templates/flat-table-crud/` |
+| **화면 구성** | **좌측 N단 트리 + 우측 가상화 조회 테이블**<br>(행 클릭 시에만 우측에서 서랍형 Drawer 입력 폼이 열림) | **좌측 N단 트리 + 우측 인라인 편집 스프레드시트**<br>(엑셀처럼 셀 직접 클릭/방향키 편집 & `Ctrl+C/V` 대량 붙여넣기) | **좌측 규격 카탈로그 + 우측 상단 마스터(분석기법/USL/LSL) 폼 & 스펙 게이지 + 우측 하단 좌↔우 아이템 셔틀** | **좌측 트리 없는 전체 화면(Full-width) DB 그리드**<br>(상단 다중 컬럼 드롭다운 필터 + 페이지네이션/가상스크롤 전환 + 우측 Drawer 편집) |
+| **추천 사용처** | 계층 분류(N단 트리)가 있고 한 아이템에 입력할 속성이 많아 건별로 안전하게 상세 조회/수정할 때 | 수백~수천 건의 USL/LSL 수치나 기준값을 엑셀에서 복사·붙여넣기 하거나 그리드 위에서 빠르게 연속 수정할 때 | **분석기법과 기본 USL/LSL 규격**을 상단에서 정의하고, 전체 수천 개 아이템 풀에서 **적용 대상 아이템을 좌↔우로 할당(Mapping)**할 때 | **계층(Tree) 없이 단일 RDB 마스터 테이블**(분석기법 코드표, 설비 마스터, 공통코드 등)을 다중 WHERE 조건으로 조회·페이징·관리할 때 |
 
 ---
 
@@ -60,6 +60,10 @@ src/
     │   └── index.ts
     └── spec-workbench-crud/                # [템플릿 3] 상하 분할 규격 워크벤치 + 좌↔우 아이템 셔틀 매핑
         ├── SpecWorkbenchCrudTemplate.tsx
+        ├── types.ts
+        └── index.ts
+    └── flat-table-crud/                    # [템플릿 4] 트리 없는 단순 RDB 테이블 다중 조건 조회·페이징·관리
+        ├── FlatTableCrudTemplate.tsx
         ├── types.ts
         └── index.ts
 ```
@@ -198,6 +202,28 @@ export function MyAnalysisMasterPage() {
 | `methodOptions` | `CrudFieldOption[]` | O | 분석기법 선택 드롭다운 옵션 목록 (`CD-SEM`, `IBO-Overlay`, `Ellipsometry` 등) |
 | `unitOptions` | `CrudFieldOption[]` | O | 측정 단위 선택 드롭다운 옵션 목록 (`nm`, `Å`, `µm`, `%` 등) |
 | `productFamilyOptions` | `CrudFieldOption[]` | O | 하단 미할당 아이템 풀의 제품군 빠른 필터 옵션 (`DDR5`, `HBM3E` 등) |
+
+---
+
+### ④ `[템플릿 4]` FlatTableCrudTemplate (`단순 DB 테이블 조회 · 관리형 - Tree 없음`)
+
+* **Import 경로:** `import { FlatTableCrudTemplate } from './templates/flat-table-crud';`
+* **타입 정의:** `src/templates/flat-table-crud/types.ts` (`FlatTableDomainConfig<TItem>`)
+
+#### `config` 속성 명세표
+
+| 속성명 | 타입 | 필수 | 설명 |
+| :--- | :--- | :---: | :--- |
+| `domainKey`, `title`, `subtitle` | `string` | O | 페이지 식별자 및 제목 |
+| `dbTableName` | `string` | X | 상단 헤더에 배지로 표시할 실제 DB 물리 테이블명 (예: `'TB_ANALYSIS_METHOD_MST'`) |
+| **`items`** | `TItem[]` | O | DB 테이블 레코드 목록 (`id` 기본키 필수) |
+| **`columns`** | `TableColumn<TItem>[]` | O | 전체 화면 테이블에 표시할 컬럼 정의 (`sortable: true` 정렬 지원) |
+| **`formSchema`** | `CrudFieldSchema[]` | O | 행 클릭 또는 `[+ 신규 레코드 등록]` 시 우측 Slide-over Drawer에 자동 생성할 입력 폼 스키마 |
+| `searchKeys` | `Array<keyof TItem & string>` | O | 키워드 검색창에서 검색할 대상 컬럼 키 배열 |
+| **`selectFilters`** | `FlatTableSelectFilter<TItem>[]` | X | 상단 검색 바에 나란히 배치할 **다중 컬럼 드롭다운 필터** 목록 (예: 공정 구분, 장비 제조사, 담당 부서 등) |
+| `statusFilterConfig` | `{ fieldKey, options }` | X | 상단 상태 세그먼트 빠른 필터 (예: 전체 / 사용중 / 교정중 / 미사용) |
+| `statMetrics` | `FlatTableStatMetric<TItem>[]` | X | 우측 상단에 실시간 집계 배지로 표시할 KPI 요약 지표 목록 |
+| `createDefaultItem` | `(count) => Partial<TItem>` | X | 신규 레코드 생성 시 초기 기본값을 반환하는 함수 |
 
 ---
 
