@@ -88,7 +88,8 @@ src/
 | **`treeData`** | `HierarchyNode<TNodeMeta>[]` | O | 좌측 N단 계층형 트리 데이터 (`id`, `parentId`, `name`, `code`, `levelLabel`, `meta`, `children`) |
 | **`items`** | `TItem[]` | O | 말단 노드에 귀속된 수천 개의 아이템 배열 (`id`, `nodeId` 필수 포함) |
 | **`columns`** | `TableColumn<TItem>[]` | O | 우측 테이블에 노출할 컬럼 배열 (가상화 성능을 위해 핵심 5~8개 컬럼 권장) |
-| **`formSchema`** | `CrudFieldSchema<TItem>[]` | O | 행 클릭 또는 `[+ 신규 항목 등록]` 시 우측 Slide-over Drawer에 자동 렌더링할 입력 필드 스키마 (`text`, `number`, `select`, `switch`, `textarea`) |
+| **`formSchema`** | `CrudFieldSchema<TItem>[]` | O | 행 클릭 또는 `[+ 신규 항목 등록]` 시 우측 Slide-over Drawer에 자동 렌더링할 입력 필드 스키마 (`text`, `number`, `select`, `switch`, `textarea`, **`spreadsheet`**) |
+| `drawerWidth` | `number \| string` | X | 우측 Drawer 폭 (기본 480px, 카드 그룹이나 인라인 스프레드시트가 포함되면 자동으로 680px~720px Wide Drawer로 확장) |
 | `searchKeys` | `Array<keyof TItem & string>` | O | 상단 검색창에서 실시간 필터링할 데이터 필드 키 배열 |
 | `statusFilterConfig` | `{ fieldKey, options }` | X | 상단 세그먼트 버튼(예: 전체 / 양산 / 검토중 / 보류) 빠른 필터 설정 |
 | `nodeMetaSchema` | `NodeMetaFieldSchema[]` | X | 좌측 트리 노드 자체를 추가/수정할 때 입력받을 커스텀 메타데이터 필드 정의 |
@@ -143,6 +144,17 @@ export function MyAnalysisMasterPage() {
   );
 }
 ```
+
+#### 알고리즘별 동적 입력 폼 (`cardGroup`, `gridSpan`, `visibleWhen`, `type: 'spreadsheet'`) 설정
+
+1번 템플릿의 `formSchema`는 선택한 알고리즘이나 기법에 따라 **카드 그룹(Card Group)** 또는 **복사·붙여넣기(`Ctrl+C/V`)가 가능한 인라인 미니 스프레드시트(`EmbeddedMiniSpreadsheet`)**로 입력창 디자인이 실시간 전환되는 기능을 지원합니다.
+
+| `CrudFieldSchema` 확장 옵션 | 설명 | 예시 |
+| :--- | :--- | :--- |
+| **`cardGroup`** | 동일한 `cardGroup` 문자열을 가진 연속된 필드들을 하나의 시각적 `<Card>` 컨테이너로 묶어 표시합니다. | `cardGroup: '카드 B: 전자빔 스캔 & 피크 검출 카드'` |
+| **`gridSpan`** | 카드 내부 6열 그리드에서 필드가 차지할 너비 (`'full'`: 1열 전체, `'half'`: 2열 반쪽, `'third'`: 3열 1/3폭) | `gridSpan: 'third'` (LSL / Target / USL 나란히 배치) |
+| **`visibleWhen`** | 특정 필드 값(예: 선택된 알고리즘)이 조건과 일치할 때만 해당 필드/카드/스프레드시트를 화면에 노출합니다. | `visibleWhen: { field: 'algorithmType', equals: 'ZONE_SHEET' }` |
+| **`type: 'spreadsheet'`** | `spreadsheetConfig: { columns, defaultRows, samplePasteRows }`와 함께 지정하면 Drawer 내부에 **엑셀 복사·붙여넣기(`Ctrl+C/V`) 및 행 추가/삭제가 가능한 미니 스프레드시트**를 렌더링합니다. | 웨이퍼 Zone별 다중 USL/LSL 테이블, 파장(Wavelength)별 굴절률 테이블 등 |
 
 ---
 

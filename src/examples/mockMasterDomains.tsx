@@ -30,6 +30,8 @@ export interface SpecItemRecord extends BaseRecordItem {
   itemCode: string;
   itemName: string;
   analysisMethod: string;
+  /** 알고리즘 유형에 따라 입력 폼이 카드 그룹 / 미니 스프레드시트 / 복합 모드로 동적 전환 */
+  algorithmType?: 'PEAK_CARD' | 'ZONE_SHEET' | 'SPECTRUM_HYBRID';
   targetValue: number;
   lsl: number;
   usl: number;
@@ -37,6 +39,17 @@ export interface SpecItemRecord extends BaseRecordItem {
   samplingRule: string;
   status: 'ACTIVE' | 'REVIEW' | 'HOLD';
   remarks?: string;
+  // 알고리즘 1 (PEAK_CARD: 카드 그룹형) 전용 파라미터
+  edgeThresholdPct?: number;
+  smoothingFilter?: string;
+  scanFrames?: number;
+  autoBaselineCorrection?: boolean;
+  // 알고리즘 2 (ZONE_SHEET: 복사·붙여넣기 스프레드시트형) 전용 다중 Zone 테이블
+  zoneSpecTable?: Array<Record<string, unknown>>;
+  // 알고리즘 3 (SPECTRUM_HYBRID: 카드 + 파장 스프레드시트 복합형) 전용 파라미터
+  fittingModel?: string;
+  minR2Score?: number;
+  wavelengthTable?: Array<Record<string, unknown>>;
 }
 
 export interface SpecNodeMeta {
@@ -295,20 +308,45 @@ function generateInitialSpecItems(): SpecItemRecord[] {
 
   const samplingRules = ['매 Lot 5매 (5 Wafer/Lot)', '전수 검사 (100%)', 'Skip Lot (1/3 Lot)'];
   const statuses: Array<'ACTIVE' | 'REVIEW' | 'HOLD'> = ['ACTIVE', 'ACTIVE', 'ACTIVE', 'ACTIVE', 'REVIEW', 'HOLD'];
+  const algoTypes: Array<'PEAK_CARD' | 'ZONE_SHEET' | 'SPECTRUM_HYBRID'> = [
+    'PEAK_CARD',
+    'ZONE_SHEET',
+    'SPECTRUM_HYBRID',
+  ];
+
+  const defaultZoneRows = [
+    { zoneId: 'Z1-CENTER', radiusMm: 0, lsl: 13.2, target: 14.0, usl: 14.8, weight: 1.0 },
+    { zoneId: 'Z2-MIDDLE', radiusMm: 75, lsl: 13.1, target: 14.0, usl: 14.9, weight: 1.0 },
+    { zoneId: 'Z3-EDGE', radiusMm: 140, lsl: 13.0, target: 14.0, usl: 15.0, weight: 0.8 },
+    { zoneId: 'Z4-EXTREME', radiusMm: 148, lsl: 12.8, target: 14.0, usl: 15.2, weight: 0.5 },
+  ];
+
+  const defaultWaveRows = [
+    { bandName: 'UV-Band-1', wavelengthNm: 248, refIndexN: 1.92, extinctionK: 0.04, tolerancePct: 1.5 },
+    { bandName: 'VIS-Band-2', wavelengthNm: 450, refIndexN: 1.85, extinctionK: 0.01, tolerancePct: 1.2 },
+    { bandName: 'NIR-Band-3', wavelengthNm: 780, refIndexN: 1.79, extinctionK: 0.00, tolerancePct: 1.0 },
+  ];
 
   const list: SpecItemRecord[] = [];
   for (const cfg of leafConfigs) {
     for (let i = 1; i <= cfg.count; i++) {
       const codeNum = String(i).padStart(4, '0');
       const itemCode = `${cfg.prefix}-${codeNum}`;
-      // 일부 아이템은 미세하게 커스텀 USL/LSL 편차를 가짐
       const offset = i % 15 === 0 ? 0.2 : 0;
+      const algo =
+        cfg.method === 'IBO-Overlay'
+          ? 'ZONE_SHEET'
+          : cfg.method === 'Ellipsometry'
+            ? 'SPECTRUM_HYBRID'
+            : algoTypes[(i - 1) % algoTypes.length];
+
       list.push({
         id: itemCode,
         nodeId: cfg.nodeId,
         itemCode,
         itemName: `${cfg.namePrefix} #${codeNum}`,
         analysisMethod: cfg.method,
+        algorithmType: algo,
         lsl: Number((cfg.lsl + offset).toFixed(2)),
         targetValue: cfg.target,
         usl: Number((cfg.usl - offset).toFixed(2)),
@@ -316,6 +354,14 @@ function generateInitialSpecItems(): SpecItemRecord[] {
         samplingRule: samplingRules[i % samplingRules.length],
         status: statuses[i % statuses.length],
         remarks: i % 15 === 0 ? '고객사 특별 규격(Tight Spec) 적용 항목' : '표준 양산 기준정보 적용',
+        edgeThresholdPct: 75,
+        smoothingFilter: 'GAUSSIAN_3PT',
+        scanFrames: 32,
+        autoBaselineCorrection: true,
+        zoneSpecTable: defaultZoneRows,
+        fittingModel: 'CAUCHY_3TERM',
+        minR2Score: 0.995,
+        wavelengthTable: defaultWaveRows,
       });
     }
   }
@@ -391,125 +437,328 @@ export const analysisSpecDomainConfig: MasterDataDomainConfig<
       </Card>
     );
   },
-  // 가상화(Virtualization) 성능을 극대화하면서 한눈에 들어오도록 핵심 6개 컬럼만 간결하게 표시
+  // 가상화(Virtualization) 성능을 극대화하면서 한눈에 들어오도록 핵심 컬럼만 간결하게 표시
+  drawerWidth: 720,
   columns: [
     {
       key: 'itemCode',
       header: '아이템 코드',
-      width: pixel(175),
+      width: pixel(170),
       sortable: true,
     },
     {
       key: 'itemName',
       header: '적용 아이템 명칭',
-      width: proportional(1.6, { minWidth: 180 }),
+      width: proportional(1.5, { minWidth: 180 }),
       sortable: true,
     },
     {
       key: 'analysisMethod',
       header: '분석 기법',
-      width: pixel(135),
+      width: pixel(120),
+      sortable: true,
+    },
+    {
+      key: 'algorithmType',
+      header: '입력 알고리즘 유형',
+      width: pixel(155),
       sortable: true,
     },
     {
       key: 'lsl',
       header: 'LSL (하한)',
-      width: pixel(100),
+      width: pixel(95),
       align: 'end',
       sortable: true,
     },
     {
       key: 'targetValue',
       header: 'Target',
-      width: pixel(95),
+      width: pixel(90),
       align: 'end',
       sortable: true,
     },
     {
       key: 'usl',
       header: 'USL (상한)',
-      width: pixel(100),
+      width: pixel(95),
       align: 'end',
       sortable: true,
     },
     {
       key: 'unit',
       header: '단위',
-      width: pixel(80),
+      width: pixel(75),
       align: 'center',
     },
     {
       key: 'status',
       header: '적용 상태',
-      width: pixel(110),
+      width: pixel(105),
       align: 'center',
       sortable: true,
     },
   ],
   formSchema: [
+    // =========================================================================
+    // [섹션 1] 공통 식별 정보 & 알고리즘 유형 선택기 (선택에 따라 아래 UI가 동적으로 바뀜)
+    // =========================================================================
     {
       key: 'itemCode',
       label: '아이템 코드 (Item ID)',
       type: 'text',
       required: true,
       readOnlyOnEdit: true,
+      gridSpan: 'half',
+      cardGroup: '기본 식별 및 적용 알고리즘 선택',
       placeholder: '예: D5-16G-GATE-2501',
-      section: '1. 대상 아이템 및 분석 기법',
-    },
-    {
-      key: 'itemName',
-      label: '아이템 명칭',
-      type: 'text',
-      required: true,
-      placeholder: '예: DDR5 16Gb Gate Wafer Item #2501',
-      section: '1. 대상 아이템 및 분석 기법',
+      section: '1. 대상 아이템 및 알고리즘 선택',
     },
     {
       key: 'analysisMethod',
-      label: '적용 분석 기법 (Analysis Method)',
+      label: '적용 분석 기법 (Method)',
       type: 'select',
       required: true,
+      gridSpan: 'half',
+      cardGroup: '기본 식별 및 적용 알고리즘 선택',
       options: [
         { label: 'CD-SEM (임계치수 전자현미경)', value: 'CD-SEM' },
         { label: 'IBO-Overlay (광학 정렬도 분석)', value: 'IBO-Overlay' },
         { label: 'Ellipsometry (박막 두께 분석)', value: 'Ellipsometry' },
         { label: 'XRR / XRD (박막 밀도/결정성)', value: 'XRR / XRD' },
         { label: 'VPD-ICP-MS (금속 오염 분석)', value: 'VPD-ICP-MS' },
-        { label: 'TEM-EDX (단면 구조/성분 분석)', value: 'TEM-EDX' },
       ],
-      section: '1. 대상 아이템 및 분석 기법',
+      section: '1. 대상 아이템 및 알고리즘 선택',
     },
     {
+      key: 'itemName',
+      label: '아이템 명칭',
+      type: 'text',
+      required: true,
+      gridSpan: 'full',
+      cardGroup: '기본 식별 및 적용 알고리즘 선택',
+      placeholder: '예: DDR5 16Gb Gate Wafer Item #2501',
+      section: '1. 대상 아이템 및 알고리즘 선택',
+    },
+    {
+      key: 'algorithmType',
+      label: '🔥 분석 알고리즘 & 입력 UI 템플릿 유형 (변경해 보세요!)',
+      type: 'select',
+      required: true,
+      gridSpan: 'full',
+      cardGroup: '기본 식별 및 적용 알고리즘 선택',
+      description:
+        '선택한 알고리즘에 따라 아래 섹션이 [카드 그룹형], [복사·붙여넣기 스프레드시트형], [카드+시트 복합형]으로 실시간 전환됩니다.',
+      options: [
+        {
+          label: '① [PEAK_CARD] 단일 피크 검출 알고리즘 ➔ 2단 카드 그룹(Card Group) 입력',
+          value: 'PEAK_CARD',
+        },
+        {
+          label: '② [ZONE_SHEET] 다중 Zone 웨이퍼 맵 알고리즘 ➔ 인라인 스프레드시트(Ctrl+C/V) 입력',
+          value: 'ZONE_SHEET',
+        },
+        {
+          label: '③ [SPECTRUM_HYBRID] 스펙트럼 피팅 알고리즘 ➔ 모델 카드 + 파장 스프레드시트 복합 입력',
+          value: 'SPECTRUM_HYBRID',
+        },
+      ],
+      section: '1. 대상 아이템 및 알고리즘 선택',
+    },
+
+    // =========================================================================
+    // [유형 ①: PEAK_CARD 선택 시] -> 카드 그룹(Card Group) 2개로 나뉘어 렌더링
+    // =========================================================================
+    {
       key: 'lsl',
-      label: 'LSL (Lower Spec Limit, 하한 규격)',
+      label: 'LSL (하한 규격)',
       type: 'number',
       required: true,
       step: 0.1,
-      description: '하한 임계치 미만 측정 시 Out-of-Spec 알람 발생',
-      section: '2. 상·하한 규격 (USL / LSL / Target)',
+      gridSpan: 'third',
+      cardGroup: '카드 A: 상·하한 규격 임계치 (Spec Limits Card)',
+      visibleWhen: { field: 'algorithmType', in: ['PEAK_CARD', 'SPECTRUM_HYBRID'] },
+      section: '2. 알고리즘 전용 파라미터 입력 (동적 UI)',
     },
     {
       key: 'targetValue',
-      label: 'Target (목표 중심값)',
+      label: 'Target (목표값)',
       type: 'number',
       required: true,
       step: 0.1,
-      section: '2. 상·하한 규격 (USL / LSL / Target)',
+      gridSpan: 'third',
+      cardGroup: '카드 A: 상·하한 규격 임계치 (Spec Limits Card)',
+      visibleWhen: { field: 'algorithmType', in: ['PEAK_CARD', 'SPECTRUM_HYBRID'] },
+      section: '2. 알고리즘 전용 파라미터 입력 (동적 UI)',
     },
     {
       key: 'usl',
-      label: 'USL (Upper Spec Limit, 상한 규격)',
+      label: 'USL (상한 규격)',
       type: 'number',
       required: true,
       step: 0.1,
-      description: '상한 임계치 초과 측정 시 Out-of-Spec 알람 발생',
-      section: '2. 상·하한 규격 (USL / LSL / Target)',
+      gridSpan: 'third',
+      cardGroup: '카드 A: 상·하한 규격 임계치 (Spec Limits Card)',
+      visibleWhen: { field: 'algorithmType', in: ['PEAK_CARD', 'SPECTRUM_HYBRID'] },
+      section: '2. 알고리즘 전용 파라미터 입력 (동적 UI)',
     },
     {
+      key: 'edgeThresholdPct',
+      label: 'Edge 검출 임계치',
+      type: 'number',
+      units: '%',
+      step: 5,
+      min: 10,
+      max: 95,
+      gridSpan: 'third',
+      cardGroup: '카드 B: 전자빔 스캔 & 피크 검출 알고리즘 카드',
+      visibleWhen: { field: 'algorithmType', equals: 'PEAK_CARD' },
+      section: '2. 알고리즘 전용 파라미터 입력 (동적 UI)',
+    },
+    {
+      key: 'scanFrames',
+      label: 'Frame 적분 횟수',
+      type: 'number',
+      units: 'frames',
+      step: 8,
+      gridSpan: 'third',
+      cardGroup: '카드 B: 전자빔 스캔 & 피크 검출 알고리즘 카드',
+      visibleWhen: { field: 'algorithmType', equals: 'PEAK_CARD' },
+      section: '2. 알고리즘 전용 파라미터 입력 (동적 UI)',
+    },
+    {
+      key: 'smoothingFilter',
+      label: '노이즈 스무딩 필터',
+      type: 'select',
+      gridSpan: 'third',
+      cardGroup: '카드 B: 전자빔 스캔 & 피크 검출 알고리즘 카드',
+      options: [
+        { label: 'Gaussian 3-Point', value: 'GAUSSIAN_3PT' },
+        { label: 'Savitzky-Golay 5-Pt', value: 'SAVGOL_5PT' },
+        { label: 'Median Filter', value: 'MEDIAN' },
+      ],
+      visibleWhen: { field: 'algorithmType', equals: 'PEAK_CARD' },
+      section: '2. 알고리즘 전용 파라미터 입력 (동적 UI)',
+    },
+    {
+      key: 'autoBaselineCorrection',
+      label: '자동 Baseline Drift 보정 활성화',
+      type: 'switch',
+      gridSpan: 'full',
+      cardGroup: '카드 B: 전자빔 스캔 & 피크 검출 알고리즘 카드',
+      visibleWhen: { field: 'algorithmType', equals: 'PEAK_CARD' },
+      section: '2. 알고리즘 전용 파라미터 입력 (동적 UI)',
+    },
+
+    // =========================================================================
+    // [유형 ②: ZONE_SHEET 선택 시] -> 복사·붙여넣기가 가능한 미니 스프레드시트 렌더링
+    // =========================================================================
+    {
+      key: 'zoneSpecTable',
+      label: '웨이퍼 Zone별 다중 USL / LSL 매트릭스 시트',
+      type: 'spreadsheet',
+      gridSpan: 'full',
+      cardGroup: '다중 Zone 스프레드시트 입력 (엑셀 Ctrl+C / Ctrl+V 지원)',
+      visibleWhen: { field: 'algorithmType', equals: 'ZONE_SHEET' },
+      section: '2. 알고리즘 전용 파라미터 입력 (동적 UI)',
+      spreadsheetConfig: {
+        helperText:
+          '웨이퍼 반경(Radius) 구간별로 서로 다른 LSL / Target / USL 및 가중치를 엑셀에서 복사해 붙여넣거나 직접 수정하세요.',
+        columns: [
+          { key: 'zoneId', header: 'Zone 코드', type: 'text', width: 120 },
+          { key: 'radiusMm', header: '반경', type: 'number', unit: 'mm', align: 'end', step: 1, width: 85 },
+          { key: 'lsl', header: 'LSL', type: 'number', unit: 'nm', align: 'end', step: 0.1, width: 85 },
+          { key: 'target', header: 'Target', type: 'number', unit: 'nm', align: 'end', step: 0.1, width: 85 },
+          { key: 'usl', header: 'USL', type: 'number', unit: 'nm', align: 'end', step: 0.1, width: 85 },
+          { key: 'weight', header: '가중치', type: 'number', align: 'end', step: 0.1, width: 75 },
+        ],
+        defaultRows: [
+          { zoneId: 'Z1-CENTER', radiusMm: 0, lsl: 13.2, target: 14.0, usl: 14.8, weight: 1.0 },
+          { zoneId: 'Z2-MIDDLE', radiusMm: 75, lsl: 13.1, target: 14.0, usl: 14.9, weight: 1.0 },
+          { zoneId: 'Z3-EDGE', radiusMm: 140, lsl: 13.0, target: 14.0, usl: 15.0, weight: 0.8 },
+        ],
+        samplePasteRows: [
+          { zoneId: 'Z1-CORE', radiusMm: 0, lsl: 13.5, target: 14.0, usl: 14.5, weight: 1.0 },
+          { zoneId: 'Z2-INNER', radiusMm: 45, lsl: 13.4, target: 14.0, usl: 14.6, weight: 1.0 },
+          { zoneId: 'Z3-MID', radiusMm: 90, lsl: 13.3, target: 14.0, usl: 14.7, weight: 0.9 },
+          { zoneId: 'Z4-OUTER', radiusMm: 125, lsl: 13.1, target: 14.0, usl: 14.9, weight: 0.8 },
+          { zoneId: 'Z5-BEVEL', radiusMm: 147, lsl: 12.9, target: 14.0, usl: 15.1, weight: 0.5 },
+        ],
+      },
+    },
+
+    // =========================================================================
+    // [유형 ③: SPECTRUM_HYBRID 선택 시] -> 광학 분산 모델 카드 + 파장별 스프레드시트 복합 렌더링
+    // =========================================================================
+    {
+      key: 'fittingModel',
+      label: '광학 분산 피팅 모델 (Dispersion Model)',
+      type: 'select',
+      gridSpan: 'half',
+      cardGroup: '카드 B: 광학 스펙트럼 피팅 모델 설정',
+      options: [
+        { label: 'Cauchy 3-Term Dispersion', value: 'CAUCHY_3TERM' },
+        { label: 'Tauc-Lorentz Oscillator', value: 'TAUC_LORENTZ' },
+        { label: 'Forouhi-Bloomer Model', value: 'FOROUHI_BLOOMER' },
+      ],
+      visibleWhen: { field: 'algorithmType', equals: 'SPECTRUM_HYBRID' },
+      section: '2. 알고리즘 전용 파라미터 입력 (동적 UI)',
+    },
+    {
+      key: 'minR2Score',
+      label: '최소 Goodness-of-Fit (R² 하한)',
+      type: 'number',
+      step: 0.001,
+      min: 0.8,
+      max: 1.0,
+      gridSpan: 'half',
+      cardGroup: '카드 B: 광학 스펙트럼 피팅 모델 설정',
+      visibleWhen: { field: 'algorithmType', equals: 'SPECTRUM_HYBRID' },
+      section: '2. 알고리즘 전용 파라미터 입력 (동적 UI)',
+    },
+    {
+      key: 'wavelengthTable',
+      label: '파장 대역별 굴절률(n, k) & 허용 오차 스프레드시트',
+      type: 'spreadsheet',
+      gridSpan: 'full',
+      cardGroup: '카드 C: 파장(Wavelength) 스펙트럼 테이블 (복사·붙여넣기)',
+      visibleWhen: { field: 'algorithmType', equals: 'SPECTRUM_HYBRID' },
+      section: '2. 알고리즘 전용 파라미터 입력 (동적 UI)',
+      spreadsheetConfig: {
+        helperText:
+          '파장(nm)별 기준 굴절률(n), 소광계수(k), 허용 오차(%) 테이블입니다. 엑셀에서 복사해 붙여넣을 수 있습니다.',
+        columns: [
+          { key: 'bandName', header: '파장 대역', type: 'text', width: 115 },
+          { key: 'wavelengthNm', header: '파장', type: 'number', unit: 'nm', align: 'end', step: 1, width: 90 },
+          { key: 'refIndexN', header: '굴절률(n)', type: 'number', align: 'end', step: 0.01, width: 95 },
+          { key: 'extinctionK', header: '소광계수(k)', type: 'number', align: 'end', step: 0.01, width: 95 },
+          { key: 'tolerancePct', header: '허용오차', type: 'number', unit: '%', align: 'end', step: 0.1, width: 95 },
+        ],
+        defaultRows: [
+          { bandName: 'UV-Band-1', wavelengthNm: 248, refIndexN: 1.92, extinctionK: 0.04, tolerancePct: 1.5 },
+          { bandName: 'VIS-Band-2', wavelengthNm: 450, refIndexN: 1.85, extinctionK: 0.01, tolerancePct: 1.2 },
+          { bandName: 'NIR-Band-3', wavelengthNm: 780, refIndexN: 1.79, extinctionK: 0.00, tolerancePct: 1.0 },
+        ],
+        samplePasteRows: [
+          { bandName: 'DUV-193', wavelengthNm: 193, refIndexN: 2.05, extinctionK: 0.12, tolerancePct: 2.0 },
+          { bandName: 'UV-248', wavelengthNm: 248, refIndexN: 1.92, extinctionK: 0.04, tolerancePct: 1.5 },
+          { bandName: 'I-Line-365', wavelengthNm: 365, refIndexN: 1.88, extinctionK: 0.02, tolerancePct: 1.2 },
+          { bandName: 'VIS-532', wavelengthNm: 532, refIndexN: 1.82, extinctionK: 0.00, tolerancePct: 1.0 },
+          { bandName: 'NIR-850', wavelengthNm: 850, refIndexN: 1.77, extinctionK: 0.00, tolerancePct: 0.8 },
+        ],
+      },
+    },
+
+    // =========================================================================
+    // [섹션 3] 공통 운영 정책 및 비고 카드
+    // =========================================================================
+    {
       key: 'unit',
-      label: '측정 단위 (Unit)',
+      label: '기본 측정 단위',
       type: 'select',
       required: true,
+      gridSpan: 'third',
+      cardGroup: '운영 정책 및 샘플링 설정',
       options: [
         { label: 'nm (나노미터)', value: 'nm' },
         { label: 'Å (옹스트롬)', value: 'Å' },
@@ -517,37 +766,43 @@ export const analysisSpecDomainConfig: MasterDataDomainConfig<
         { label: 'E9 atoms/cm²', value: 'E9 atoms/cm²' },
         { label: '% (퍼센트)', value: '%' },
       ],
-      section: '2. 상·하한 규격 (USL / LSL / Target)',
+      section: '3. 공통 운영 정책 및 비고',
     },
     {
       key: 'samplingRule',
       label: '샘플링 주기',
       type: 'select',
+      gridSpan: 'third',
+      cardGroup: '운영 정책 및 샘플링 설정',
       options: [
         { label: '매 Lot 5매 (5 Wafer/Lot)', value: '매 Lot 5매 (5 Wafer/Lot)' },
         { label: '전수 검사 (100%)', value: '전수 검사 (100%)' },
         { label: 'Skip Lot (1/3 Lot)', value: 'Skip Lot (1/3 Lot)' },
       ],
-      section: '3. 운영 정책 및 비고',
+      section: '3. 공통 운영 정책 및 비고',
     },
     {
       key: 'status',
       label: '운영 상태',
       type: 'select',
       required: true,
+      gridSpan: 'third',
+      cardGroup: '운영 정책 및 샘플링 설정',
       options: [
         { label: 'ACTIVE (양산 적용)', value: 'ACTIVE' },
         { label: 'REVIEW (엔지니어 검토중)', value: 'REVIEW' },
         { label: 'HOLD (적용 보류)', value: 'HOLD' },
       ],
-      section: '3. 운영 정책 및 비고',
+      section: '3. 공통 운영 정책 및 비고',
     },
     {
       key: 'remarks',
       label: '비고 / 특이사항',
       type: 'textarea',
+      gridSpan: 'full',
+      cardGroup: '운영 정책 및 샘플링 설정',
       placeholder: '예외 규격 사유 또는 변경 이력을 메모하세요.',
-      section: '3. 운영 정책 및 비고',
+      section: '3. 공통 운영 정책 및 비고',
     },
   ],
   createDefaultItem: (selectedNode, currentCount) => {
@@ -559,12 +814,19 @@ export const analysisSpecDomainConfig: MasterDataDomainConfig<
       itemCode: `${codePrefix}-${seq}`,
       itemName: `${selectedNode.name} 적용 아이템 #${seq}`,
       analysisMethod: meta?.defaultMethod ?? 'CD-SEM',
+      algorithmType: 'ZONE_SHEET',
       lsl: meta?.defaultLsl ?? 10.0,
       targetValue: meta?.defaultTarget ?? 12.0,
       usl: meta?.defaultUsl ?? 14.0,
       unit: meta?.unit ?? 'nm',
       samplingRule: '매 Lot 5매 (5 Wafer/Lot)',
       status: 'ACTIVE',
+      edgeThresholdPct: 75,
+      smoothingFilter: 'GAUSSIAN_3PT',
+      scanFrames: 32,
+      autoBaselineCorrection: true,
+      fittingModel: 'CAUCHY_3TERM',
+      minR2Score: 0.995,
       remarks: '',
     };
   },

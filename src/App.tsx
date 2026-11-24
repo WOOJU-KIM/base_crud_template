@@ -46,7 +46,7 @@ type ActiveTemplateTab =
 export function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>('light');
   const [activeDomain, setActiveDomain] =
-    useState<ActiveTemplateTab>('flat-db-table');
+    useState<ActiveTemplateTab>('analysis-spec');
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   return (

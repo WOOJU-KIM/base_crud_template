@@ -39,18 +39,33 @@ export interface BaseRecordItem extends Record<string, unknown> {
 
 /**
  * Slide-over Drawer 및 신규/수정 폼을 자동 생성하기 위한 필드 스키마 정의
- * 새로운 기준정보 페이지를 만들 때 이 배열만 정의하면 입력/수정 Drawer가 자동으로 구성됩니다.
+ * 단순 입력뿐 아니라 알고리즘/기법별로 다른 형태(카드 그룹, 복사·붙여넣기 미니 스프레드시트, 동적 조건 리스트 등)를 지원합니다.
  */
 export type CrudFieldType =
   | 'text'
   | 'number'
   | 'select'
   | 'switch'
-  | 'textarea';
+  | 'textarea'
+  | 'spreadsheet';
 
 export interface CrudFieldOption {
   label: string;
   value: string;
+}
+
+/**
+ * Drawer 내부에 임베디드되는 미니 스프레드시트(복사·붙여넣기 가능)의 컬럼 정의
+ */
+export interface EmbeddedSheetColumn {
+  key: string;
+  header: string;
+  type: 'text' | 'number' | 'select';
+  width?: number;
+  align?: 'start' | 'center' | 'end';
+  step?: number;
+  unit?: string;
+  options?: CrudFieldOption[];
 }
 
 export interface CrudFieldSchema<TItem extends BaseRecordItem = BaseRecordItem> {
@@ -58,7 +73,7 @@ export interface CrudFieldSchema<TItem extends BaseRecordItem = BaseRecordItem> 
   key: keyof TItem & string;
   /** 필드 라벨 */
   label: string;
-  /** 입력 컨트롤 타입 */
+  /** 입력 컨트롤 타입 ('spreadsheet'를 지정하면 복사·붙여넣기가 가능한 인라인 시트가 렌더링됨) */
   type: CrudFieldType;
   /** 필수 입력 여부 */
   required?: boolean;
@@ -82,6 +97,35 @@ export interface CrudFieldSchema<TItem extends BaseRecordItem = BaseRecordItem> 
   section?: string;
   /** 수정 시 읽기 전용 여부 (예: Primary Code) */
   readOnlyOnEdit?: boolean;
+
+  // ============================================================================
+  // [알고리즘별 동적 UI (Polymorphic Input) 확장 옵션]
+  // ============================================================================
+  /**
+   * 카드 그룹 타이틀: 동일한 cardGroup 이름을 가진 필드들은 하나의 시각적 카드(Card)로 묶여서 렌더링됩니다.
+   * 예: '1. 피크 검출(Peak Detection) 파라미터 카드', '2. 노이즈 필터 & 보정 카드'
+   */
+  cardGroup?: string;
+  /** 카드 내부 그리드 배치 폭 ('full': 1열 전체, 'half': 2열 반쪽, 'third': 3열) @default 'full' */
+  gridSpan?: 'full' | 'half' | 'third';
+  /**
+   * 조건부 노출 규칙 (알고리즘별로 다른 입력창을 보여줄 때 사용)
+   * 예: { field: 'analysisMethod', equals: 'CD-SEM' } 또는 { field: 'inputTemplateType', in: ['ZONE_SHEET', 'HYBRID'] }
+   */
+  visibleWhen?: {
+    field: keyof TItem & string;
+    equals?: unknown;
+    in?: unknown[];
+  };
+  /**
+   * type === 'spreadsheet' 일 때 미니 스프레드시트의 컬럼 구조 및 샘플 붙여넣기 행 정의
+   */
+  spreadsheetConfig?: {
+    columns: EmbeddedSheetColumn[];
+    defaultRows?: Array<Record<string, unknown>>;
+    samplePasteRows?: Array<Record<string, unknown>>;
+    helperText?: string;
+  };
 }
 
 /**
@@ -118,8 +162,10 @@ export interface MasterDataDomainConfig<
   items: TItem[];
   /** 우측 테이블에 표시할 핵심 컬럼 정의 (화면이 복잡하지 않게 4~6개 권장) */
   columns: TableColumn<TItem>[];
-  /** 우측 Slide-over Drawer에서 편집할 전체 필드 스키마 */
+  /** 우측 Slide-over Drawer에서 편집할 전체 필드 스키마 (알고리즘별 조건부 카드/스프레드시트 포함) */
   formSchema: CrudFieldSchema<TItem>[];
+  /** 우측 Drawer 너비 (기본 460px, 복합 카드/인라인 스프레드시트가 포함될 때는 720~780 권장) */
+  drawerWidth?: number | string;
   /** 트리 노드 자체에 추가할 커스텀 메타 필드 스키마 (선택) */
   nodeMetaSchema?: NodeMetaFieldSchema[];
   /** 선택된 트리 노드 상단에 요약 배너/메타 카드를 커스텀 렌더링할 함수 (선택) */

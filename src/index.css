@@ -404,4 +404,79 @@ html, body, #root {
   color: inherit;
 }
 
+/* =========================================================
+   Polymorphic Drawer Form: Card Groups & Embedded Mini-Spreadsheet
+   ========================================================= */
+.poly-card-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.poly-grid-span-full {
+  grid-column: span 6;
+}
+
+.poly-grid-span-half {
+  grid-column: span 3;
+}
+
+.poly-grid-span-third {
+  grid-column: span 2;
+}
+
+@media (max-width: 640px) {
+  .poly-grid-span-half,
+  .poly-grid-span-third {
+    grid-column: span 6;
+  }
+}
+
+.poly-mini-sheet-box {
+  border: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.24));
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  background: var(--color-surface, #ffffff);
+}
+
+[data-theme="dark"] .poly-mini-sheet-box {
+  background: var(--color-surface, #16181d);
+}
+
+.poly-mini-sheet-toolbar {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border-subtle, rgba(128, 128, 128, 0.18));
+  background: var(--color-surface-elevated, #f7f8fa);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+[data-theme="dark"] .poly-mini-sheet-toolbar {
+  background: var(--color-surface-elevated, #1f2229);
+}
+
+.poly-mini-sheet-scroll {
+  max-height: 260px;
+  overflow: auto;
+}
+
+.poly-paste-textarea {
+  width: 100%;
+  min-height: 76px;
+  padding: 8px 10px;
+  font-family: monospace;
+  font-size: 12px;
+  border: 1px dashed #2563eb;
+  border-radius: 6px;
+  background: rgba(37, 99, 235, 0.04);
+  color: inherit;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+
 

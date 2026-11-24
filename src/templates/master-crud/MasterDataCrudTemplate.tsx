@@ -847,6 +847,7 @@ export function MasterDataCrudTemplate<
         selectedNode={selectedNode}
         nodePathLabel={nodePathLabel}
         schema={config.formSchema}
+        drawerWidth={config.drawerWidth}
         onSubmit={handleSaveRecord}
         onDelete={handleDeleteRecord}
       />
